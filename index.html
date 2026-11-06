@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#141727">
+  <meta name="description" content="Mini Mozart – Intervalltraining mit Gehör, Notenbild und Mikrofon.">
+  <title>Mini Mozart · Solfège-Lernspiel</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><div class="brandmark" aria-hidden="true">𝄞</div><div><strong>MINI MOZART</strong><span>SOLFÈGE LAB</span></div></div>
+      <div class="topright"><span class="chip"><span class="dot"></span> Ohne Anmeldung</span><button class="iconbutton" id="helpButton" aria-label="Anleitung öffnen" title="Anleitung">?</button></div>
+    </header>
+    <main>
+      <section class="hero"><p class="eyebrow">HÖREN. VERSTEHEN. SINGEN.</p><h1>Dein Gehör.<br><em>Deine Musik.</em></h1><p class="lede">Entdecke Intervalle, erkenne sie im Notenbild und singe sie selbst – vom ersten Ton bis zu musikalischen Feinheiten.</p></section>
+      <div class="workspace">
+        <aside class="sidepanel" aria-label="Spieleinstellungen">
+          <div class="blockhead"><span>01 / LEVEL</span><span class="muted">Wähle deine Stufe</span></div>
+          <div class="levelchoices" role="group" aria-label="Schwierigkeitsstufe">
+            <button data-level="basic" class="levelbtn active" aria-pressed="true"><span class="levelsymbol">Ⅰ</span><span><strong>Basic</strong><small>Prime bis Quinte</small></span><span class="levelcheck">✓</span></button>
+            <button data-level="advanced" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅱ</span><span><strong>Advanced</strong><small>Bis zur Septime</small></span><span class="levelcheck">✓</span></button>
+            <button data-level="pro" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅲ</span><span><strong>Profi</strong><small>Tritonus &amp; Alterationen</small></span><span class="levelcheck">✓</span></button>
+          </div>
+          <div class="separator"></div>
+          <div class="blockhead"><span>02 / TRAINING</span><span class="muted">Deine Disziplin</span></div>
+          <div class="modes" role="group" aria-label="Trainingsmodus"><button id="listenMode" class="modebtn active" aria-pressed="true"><span class="modeicon">♫</span><strong>Erkennen</strong><small>Hören oder lesen</small></button><button id="singMode" class="modebtn" aria-pressed="false"><span class="modeicon">◉</span><strong>Singen</strong><small>Mit Mikrofon</small></button></div>
+          <div id="listenOptions" class="optionblock"><label for="questionType">Aufgabentyp</label><select id="questionType"><option value="audio">Hören → Begriff</option><option value="notation">Notenbild → Begriff</option></select></div>
+          <div class="optionblock"><label for="direction">Richtung</label><select id="direction"><option value="up">Aufwärts</option><option value="down">Abwärts</option><option value="mixed">Gemischt</option></select></div>
+          <div class="separator"></div>
+          <div class="statrow"><div><span class="statlabel">Beste Serie</span><strong id="bestStreak">0</strong></div><div><span class="statlabel">Gesamt richtig</span><strong id="allCorrect">0</strong></div></div>
+          <button id="resetProgress" class="textbtn">Fortschritt zurücksetzen</button>
+        </aside>
+        <section class="gamepanel" aria-label="Intervalltraining">
+          <div class="gameheader"><span class="tag" id="roundTag">BASIC · ERKENNEN</span><span class="roundcounter" id="roundCounter">AUFGABE 01 / 10</span></div>
+          <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+          <div class="gameintro"><div class="question-badge" id="promptSymbol">♪</div><p class="eyebrow" id="promptEyebrow">GEHÖRTRAINING</p><h2 id="promptTitle">Welches Intervall hörst du?</h2><p id="promptDescription" class="promptdesc">Spiele die zwei Töne ab und gib den Intervallnamen ein.</p></div>
+          <div class="scoreboard"><span>RICHTIG <b id="correctScore">0</b></span><span>SERIE <b id="streakScore">0</b></span><span>LEVEL <b id="levelLabel">BASIC</b></span></div>
+          <div class="notation-card" id="notationCard"><div class="notation-heading"><span>NOTENBILD</span><span id="notationHint">Nach deiner Antwort sichtbar</span></div><div id="scoreWrap" class="scorewrap is-hidden"><svg id="staff" viewBox="0 0 560 190" role="img" aria-label="Zwei Noten im Violinschlüssel" preserveAspectRatio="xMidYMid meet"></svg></div><div id="scorePlaceholder" class="scoreplaceholder"><span>𝄞</span><p>Entdecke die Noten nach der Lösung</p></div><div class="notelegend" id="noteLegend"></div></div>
+          <div id="listenArea" class="actionarea"><button class="playbtn" id="playButton"><span class="playtriangle">▶</span><span>Intervall abspielen</span><small>2 Töne nacheinander</small></button><div class="answerrow"><label for="answerInput">DEINE ANTWORT</label><div class="answerinputrow"><input id="answerInput" type="text" autocomplete="off" spellcheck="false" placeholder="z. B. grosse Terz" aria-label="Intervallname eingeben"><button id="checkButton" class="primarybtn">Prüfen <span>↗</span></button></div><div class="answerhint" id="answerHint">Du kannst auch «g3», «k2» oder «r5» schreiben.</div></div></div>
+          <div id="singArea" class="actionarea" hidden><div class="singinstructions">Singe zuerst den <strong>Startton</strong>, dann den <strong>Zielton</strong>. Halte jeden Ton kurz und möglichst stabil.</div><div class="singbuttons"><button id="referenceButton" class="secondarybtn">♫ Startton hören</button><button id="demoButton" class="secondarybtn">♫ Intervall anhören</button></div><button id="micButton" class="micbtn"><span class="miccircle">●</span><span id="micButtonLabel">Mikrofon starten</span></button><div class="micdata"><div class="meterwrap"><div class="meter"><div id="meterFill"></div></div><span id="micStatus">Bereit zum Singen</span></div><div class="pitchrow"><div><span>ERKANNTER TON</span><strong id="detectedNote">–</strong></div><div><span>ZIEL</span><strong id="targetNote">–</strong></div><div><span>ABWEICHUNG</span><strong id="centsLabel">–</strong></div></div><div class="singsteps"><span id="singStepOne" class="step active">1 · Startton</span><span id="singStepTwo" class="step">2 · Zielton</span></div></div></div>
+          <div id="feedback" role="status" aria-live="polite" class="feedback" hidden></div>
+          <div class="gamefooter"><button id="revealButton" class="textbtn">Lösung anzeigen</button><button id="nextButton" class="nextbtn" disabled>Nächste Aufgabe <span>→</span></button></div>
+        </section>
+      </div>
+      <section class="footerinfo"><div><span class="footicon">♩</span><strong>Musiktheorie, die klingt.</strong><p>Reine Quarte statt «kleiner/grosser Quarte»: Die reine Quarte gehört ins Basic-Level, verminderte und übermässige Quarten ins Profi-Level.</p></div><div><span class="footicon">◌</span><strong>Privat und direkt.</strong><p>Die Tonerkennung läuft ausschliesslich im Browser. Keine Aufnahme wird gespeichert oder hochgeladen.</p></div><div><span class="footicon">↗</span><strong>Für den Unterricht.</strong><p>Auf Desktop, Tablet und Smartphone verwendbar. Das Mikrofon benötigt eine HTTPS-Seite und eine Berechtigung.</p></div></section>
+    </main><footer class="sitefooter">MINI MOZART <span>·</span> LEARN THE DISTANCE BETWEEN NOTES <span>·</span> © 2026</footer>
+  </div>
+  <dialog id="helpDialog"><form method="dialog"><button class="dialogclose" aria-label="Schliessen">×</button><p class="eyebrow">SO FUNKTIONIERT ES</p><h2>Dein musikalisches Training</h2><p><b>Erkennen:</b> Höre zwei Töne oder lies das Notenbild und tippe das Intervall ein. Schreibweisen wie «kleine Terz» und «k3» werden akzeptiert.</p><p><b>Singen:</b> Höre den Startton, aktiviere das Mikrofon und singe die beiden notierten Töne nacheinander. Die Erkennung zeigt die Tonhöhe live an. Ruhig und ohne Begleitmusik singen.</p><p><b>Bewertung:</b> Der gesungene Ton muss ungefähr ±50 Cent (ein halber Halbton) genau sein und für einen kurzen Moment stabil bleiben. In Oktaven abweichende Töne zählen nicht als richtig.</p><p><b>Begriffe:</b> Die Prime, Quarte, Quinte und Oktave sind in der Grundform «rein». Kleinen/grossen Quarten gibt es in der gebräuchlichen Intervalllehre nicht.</p><p><b>Datenschutz:</b> Das Mikrofon wird nur während der Übung verwendet. Audiodaten verlassen das Gerät nicht.</p><button class="primarybtn">Verstanden</button></form></dialog>
+</body>
+</html>
