@@ -20,12 +20,19 @@ const INTERVALS=[
 {id:'A5',label:'übermässige Quinte',short:'ü5',degree:5,semitones:8,tier:2}
 ];
 const LETTERS=['C','D','E','F','G','A','B'],NAT={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
-const LEVELS = ['Basic', 'Advanced', 'Profi', 'Dreiklänge', 'Umkehrungen & Lagen'];
+const LEVELS = ['Basic', 'Advanced', 'Profi', 'Dreiklänge', 'Umkehrungen & Lagen', 'Vierklänge'];
 const TRIADS = [
   { id: 'dur', label: 'Dur', third: 4, fifth: 7 },
   { id: 'moll', label: 'Moll', third: 3, fifth: 7 },
   { id: 'dim', label: 'vermindert', third: 3, fifth: 6 },
   { id: 'aug', label: 'übermässig', third: 4, fifth: 8 },
+];
+const SEVENTH_CHORDS = [
+  { id: 'dominant7', label: 'Dominantseptakkord (7)', third: 4, fifth: 7, seventh: 10 },
+  { id: 'maj7', label: 'Dur mit grosser Septime (maj7)', third: 4, fifth: 7, seventh: 11 },
+  { id: 'min7', label: 'Mollseptakkord (m7)', third: 3, fifth: 7, seventh: 10 },
+  { id: 'halfDim7', label: 'Halbverminderter Septakkord (m7♭5)', third: 3, fifth: 6, seventh: 10 },
+  { id: 'dim7', label: 'Verminderter Septakkord (dim7)', third: 3, fifth: 6, seventh: 9 },
 ];
 const INVERSIONS = ['Grundstellung', '1. Umkehrung', '2. Umkehrung'];
 const POSITIONS = ['Oktavlage', 'Terzlage', 'Quintlage'];
@@ -39,17 +46,20 @@ function makeNote(root,it,sign){let index=LETTERS.indexOf(root.l)+sign*(it.degre
 function noteName(n){return (n.l==='B'?(n.a===-1?'B':'H'):n.l)+(n.a===1?'♯':n.a===-1?'♭':n.a===2?'𝄪':n.a===-2?'𝄫':'')+n.o}
 function makeChord() {
   const voicing = st.level === 4;
-  const quality = choose(voicing ? TRIADS.slice(0, 2) : TRIADS);
+  const qualities = st.level === 5 ? SEVENTH_CHORDS : TRIADS;
+  const quality = choose(voicing ? qualities.slice(0, 2) : qualities);
   const inversion = voicing ? choose([0, 1, 2]) : 0;
   const position = voicing ? choose([0, 1, 2]) : 2;
-  const tones = [0, quality.third, quality.fifth].map((semitones, index) => ({
+  const semitones = [0, quality.third, quality.fifth];
+  if (quality.seventh !== undefined) semitones.push(quality.seventh);
+  const tones = semitones.map((semitones, index) => ({
     degree: 2 * index + 1, semitones,
   }));
   const candidates = [3, 4, 5].flatMap(o => LETTERS.map(l => {
     const root = { l, o, a: 0 };
     const notes = [makeNote(root, tones[inversion], 1)];
     // Cycle the upper voices so the requested chord tone is on top.
-    const upper = voicing ? [(position + 1) % 3, (position + 2) % 3, position] : [1, 2];
+    const upper = voicing ? [(position + 1) % 3, (position + 2) % 3, position] : tones.slice(1).map((_, index) => index + 1);
     for (const index of upper) {
       const note = makeNote(root, tones[index], 1);
       while (midi(note) <= midi(notes[notes.length - 1])) note.o++;
@@ -62,6 +72,13 @@ function makeChord() {
 
 function showChordQuestion() {
   const voicing = st.level === 4;
+  const seventh = st.level === 5;
+  const chordName = seventh ? 'Vierklang' : 'Dreiklang';
+  const qualities = seventh ? SEVENTH_CHORDS : TRIADS;
+  $('chordQuality').replaceChildren(new Option('Bitte wählen', ''),
+    ...qualities.map(quality => new Option(quality.label, quality.id)));
+  $('chordQualityLabel').textContent = seventh ? 'VIERKLANGTYP' : 'DREIKLANGTYP';
+  $('playChordLabel').textContent = chordName + ' abspielen';
   $('chordQualityRow').hidden = voicing;
   $('voicingAnswers').hidden = !voicing;
   for (const id of ['chordQuality', 'chordInversion', 'chordPosition']) {
@@ -71,10 +88,10 @@ function showChordQuestion() {
   $('checkChord').disabled = false;
   $('promptEyebrow').textContent = st.type === 'audio' ? 'GEHÖRTRAINING' : 'NOTENLESEN';
   $('promptTitle').textContent = voicing ? 'Welche Umkehrung und Lage hat der Dreiklang?' :
-    st.type === 'audio' ? 'Welchen Dreiklang hörst du?' : 'Welchen Dreiklang siehst du?';
+    'Welchen ' + chordName + (st.type === 'audio' ? ' hörst du?' : ' siehst du?');
   $('promptDescription').textContent = voicing
     ? 'Der tiefste Ton bestimmt die Umkehrung, der höchste die Lage. Du hörst oder siehst Dur- und Molldreiklänge mit einem verdoppelten Akkordton.'
-    : 'Bestimme den Typ des Dreiklangs in Grundstellung.';
+    : 'Bestimme den Akkordtyp in Grundstellung.';
   if (st.type === 'audio') hideScore();
   else showScore();
 }
