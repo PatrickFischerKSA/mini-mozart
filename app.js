@@ -64,6 +64,20 @@ const st={level:0,mode:'listen',type:'audio',dir:'up',round:0,total:10,correct:0
 st.track = 'pitch';
 st.rhythmLevel = 0;
 st.rhythmType = 'audio';
+st.melodyType = 'sing';
+const MELODY_NOTES = [0,1,2,3,4,5,6,7].map(i => ({l:LETTERS[i % 7], o:i === 7 ? 5 : 4, a:0}));
+const MELODIES = [
+  [0,1,2,1,0], [0,2,4,3,2], [0,1,3,2,0], [1,2,4,3,1],
+  [2,3,4,2,0], [2,4,5,4,2], [4,3,2,4,0], [4,5,7,6,4],
+];
+const DUETS = [
+  [[2,3,4,3,2], [0,1,0,1,0]],
+  [[4,5,4,3,2], [0,3,2,1,0]],
+  [[7,6,5,6,7], [4,2,3,4,2]],
+  [[4,3,2,3,4], [2,1,0,1,0]],
+  [[2,4,5,3,2], [0,2,3,1,0]],
+  [[5,4,3,4,3], [3,2,1,0,1]],
+];
 const stats=(()=>{try{return JSON.parse(localStorage.getItem('miniMozartStats')||'{"best":0,"total":0}')}catch{return {best:0,total:0}}})();
 function save(){localStorage.setItem('miniMozartStats',JSON.stringify(stats))}
 function midi(n){return (n.o+1)*12+NAT[n.l]+n.a}
@@ -306,22 +320,216 @@ function recordRhythmTap() {
   }
 }
 
+function melodyNote(value, bass = false) {
+  const note = MELODY_NOTES[value];
+  return bass ? { ...note, o: note.o - 1 } : note;
+}
+
+function melodyNotation(notes, { current = -1, marks = [], bass = false } = {}) {
+  const lines = [52,72,92,112,132].map(line =>
+    '<path d="M35 ' + line + ' H530" stroke="#b3a089"/>').join('');
+  const clef = bass ? '<text x="45" y="107" font-family="serif" font-size="76" fill="#efd4a1">𝄢</text>'
+    : '<text x="45" y="129" font-family="serif" font-size="86" fill="#efd4a1">𝄞</text>';
+  return lines + clef +
+    '<path d="M530 52 V132" stroke="#b3a089"/>' + notes.map((value, index) => {
+      const x = 155 + 80 * index;
+      const color = marks[index] === true ? '#8cdbb1' : marks[index] === false ? '#f1a394' : '#faf0dc';
+      const highlight = index === current
+        ? '<rect x="' + (x-30) + '" y="36" width="60" height="126" rx="8" fill="#e5ba7833"/>' : '';
+      if (value === null) return highlight + '<circle cx="' + x + '" cy="92" r="6" fill="none" stroke="#b3a089" stroke-dasharray="3 2"/>';
+      const yy = y(melodyNote(value, bass)) - (bass ? 120 : 0);
+      const ledger = yy >= 152 ? '<path d="M' + (x-16) + ' 152 h32" stroke="#c9b397"/>' : '';
+      return highlight + ledger + '<g fill="' + color + '" stroke="' + color + '">' +
+        '<ellipse cx="' + x + '" cy="' + yy + '" rx="10" ry="6" transform="rotate(-18 ' + x + ' ' + yy + ')"/>' +
+        '<path d="M' + (x+9) + ' ' + yy + ' v-42" stroke-width="2"/></g>';
+    }).join('');
+}
+
+function renderMelody() {
+  const melody = st.melody;
+  const singing = st.melodyType !== 'dictation';
+  const notes = singing ? melody.target : melody.answer;
+  const marks = singing
+    ? notes.map((_, index) => index < melody.step ? true : undefined)
+    : st.answered ? notes.map((note, index) => note === melody.target[index]) : [];
+  const options = { current: st.answered ? -1 : melody.step, marks };
+  const staves = melody.voices || [notes];
+  staves.forEach((line, index) => {
+    const staff = $(index === 0 ? 'melodyStaff' : 'duetLowerStaff');
+    const bass = index === 1;
+    const active = !melody.voices || index === melody.voice;
+    staff.innerHTML = melodyNotation(line, { ...(active ? options : {}), bass });
+    staff.setAttribute('aria-label', (bass ? 'Unterstimme im Bassschlüssel' : melody.voices ? 'Oberstimme im Violinschlüssel' : 'Violinschlüssel') + ': ' +
+      line.map(note => note === null ? 'leer' : noteName(melodyNote(note, bass))).join(', '));
+  });
+}
+
+function showMelodyQuestion() {
+  const duet = st.melodyType === 'duet';
+  const singing = st.melodyType !== 'dictation';
+  const voices = duet ? choose(DUETS.filter(pair => pair !== st.melody?.voices)) : null;
+  const voice = Number($('duetVoice').value);
+  const target = voices ? voices[voice] : choose(MELODIES.filter(melody => melody !== st.melody?.target));
+  st.melody = { target, voices, voice, answer: [target[0], null, null, null, null], step: singing ? 0 : 1 };
+  $('promptEyebrow').textContent = duet ? 'ZWEISTIMMIGER SATZ' : singing ? 'BLATTSINGEN' : 'NOTENDIKTAT';
+  $('promptTitle').textContent = duet ? 'Kannst du deine Stimme singen?' : singing ? 'Kannst du diese Melodie singen?' : 'Welche Töne hörst du?';
+  $('promptDescription').textContent = duet
+    ? 'Höre beide Stimmen zusammen oder einzeln. Wähle dann deine Stimme und singe sie in deinem Tempo.'
+    : singing
+    ? 'Höre bei Bedarf den Startton. Singe dann die fünf Noten nacheinander in deinem Tempo.'
+    : 'Höre die Melodie und ergänze die vier fehlenden Noten. Der erste Ton ist vorgegeben.';
+  $('melodyScoreTitle').textContent = duet ? 'OBERSTIMME' : singing ? 'DEINE MELODIE' : 'DEIN NOTENDIKTAT';
+  for (const id of ['duetSettings', 'duetLower', 'duetPlayback']) $(id).hidden = !duet;
+  $('duetVoice').disabled = false;
+  $('melodyStatus').textContent = singing ? 'Die hervorgehobene Note ist als Nächstes dran.' :
+    'Tippe ins Notensystem oder wähle die Tonhöhen unter den Noten.';
+  $('melodySolution').hidden = true;
+  $('melodyInputs').hidden = singing;
+  $('melodyListen').hidden = singing;
+  $('melodyMic').hidden = !singing;
+  $('melodyMic').disabled = false;
+  $('melodyCheck').hidden = singing;
+  $('melodyCheck').disabled = false;
+  $('melodyStaff').classList.toggle('editable', !singing);
+  $('melodyInputs').replaceChildren(...target.slice(1).map((_, offset) => {
+    const index = offset + 1;
+    const label = document.createElement('label');
+    label.textContent = 'Ton ' + (index + 1);
+    const select = document.createElement('select');
+    select.replaceChildren(new Option('Wählen', ''),
+      ...MELODY_NOTES.map((note, value) => new Option(noteName(note), value)));
+    select.onfocus = () => { st.melody.step = index; renderMelody(); };
+    select.onchange = () => {
+      st.melody.answer[index] = select.value === '' ? null : Number(select.value);
+      renderMelody();
+    };
+    label.append(select);
+    return label;
+  }));
+  renderMelody();
+}
+
+function placeMelodyNote(event) {
+  if (st.melodyType !== 'dictation' || st.answered) return;
+  const staff = $('melodyStaff');
+  const transform = staff.getScreenCTM();
+  if (!transform) return;
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(transform.inverse());
+  const index = Math.round((point.x - 155) / 80);
+  if (index < 1 || index >= st.melody.answer.length || point.y < 68 || point.y > 166) return;
+  const value = Math.min(7, Math.max(0, Math.round((152 - point.y) / 10)));
+  st.melody.answer[index] = value;
+  st.melody.step = index;
+  $('melodyInputs').querySelectorAll('select')[index - 1].value = String(value);
+  renderMelody();
+}
+
+function finishMelody() {
+  const { target, step, answer } = st.melody;
+  $('melodyMic').disabled = true;
+  $('melodyCheck').disabled = true;
+  $('melodyStatus').textContent = '';
+  renderMelody();
+  if (st.melodyType !== 'dictation') {
+    $('duetVoice').disabled = true;
+    return step + ' von ' + target.length + ' Tönen erkannt';
+  }
+  $('melodyInputs').querySelectorAll('select').forEach(select => { select.disabled = true; });
+  $('melodySolutionStaff').innerHTML = melodyNotation(target);
+  $('melodySolutionStaff').setAttribute('aria-label', 'Lösung: ' + target.map(note => noteName(MELODY_NOTES[note])).join(', '));
+  $('melodySolution').hidden = false;
+  return answer.slice(1).filter((note, index) => note === target[index + 1]).length + ' von 4 eingetragenen Tönen richtig';
+}
+
+function checkMelody() {
+  const { answer, target } = st.melody;
+  const missing = answer.indexOf(null);
+  if (missing !== -1) return $('melodyInputs').querySelectorAll('select')[missing - 1].focus();
+  finish(answer.every((note, index) => note === target[index]));
+}
+
+function singMelodyLoop() {
+  const melody = st.melody;
+  const buffer = new Float32Array(st.analyser.fftSize);
+  st.analyser.getFloatTimeDomainData(buffer);
+  const detected = pitch(buffer, st.ctx.sampleRate, true);
+  const bass = melody.voices && melody.voice === 1;
+  const target = midi(melodyNote(melody.target[melody.step], bass));
+  const alternateOctave = bass ? 12 : -12;
+  const nearAlternate = detected !== null && Math.abs(detected - target - alternateOctave) <= .55;
+  const octave = melody.octave ?? (nearAlternate ? alternateOctave : 0);
+  const difference = detected === null ? null : detected - target - octave;
+  if (difference !== null && Math.abs(difference) <= .55) {
+    melody.stableSince ??= performance.now();
+    if (performance.now() - melody.stableSince >= 260) {
+      melody.octave = octave;
+      melody.step++;
+      melody.stableSince = null;
+      if (melody.step === melody.target.length) return finish(true);
+      renderMelody();
+      $('melodyStatus').textContent = 'Ton ' + melody.step + ' erkannt. Singe die nächste Note.';
+    }
+  } else {
+    melody.stableSince = null;
+  }
+  st.raf = requestAnimationFrame(singMelodyLoop);
+}
+
+async function startMelodyMic() {
+  stopDuetAudio();
+  if (st.stream) {
+    stopMic();
+    $('melodyStatus').textContent = 'Mikrofon pausiert. Du kannst bei der markierten Note fortfahren.';
+    return;
+  }
+  const question = st.melody;
+  const button = $('melodyMic');
+  button.disabled = true;
+  let stream;
+  try {
+    const ctx = audio();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (st.track !== 'melody' || st.melody !== question || st.answered) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+    st.stream = stream;
+    st.source = ctx.createMediaStreamSource(stream);
+    st.analyser = ctx.createAnalyser();
+    st.analyser.fftSize = 4096;
+    st.source.connect(st.analyser);
+    question.stableSince = null;
+    button.textContent = 'Mikrofon stoppen';
+    $('melodyStatus').textContent = 'Singe die markierte Note und halte sie kurz.';
+    singMelodyLoop();
+  } catch {
+    if (st.melody === question && st.track === 'melody' && !st.answered) {
+      stopMic();
+      $('melodyStatus').textContent = 'Kein Mikrofonzugriff. Prüfe die Berechtigung im Browser.';
+    }
+  } finally {
+    if (st.melody === question && st.track === 'melody' && !st.answered) button.disabled = false;
+  }
+}
+
 function newQuestion(){
-stopMic();stopRhythm();st.round++;if(st.round>st.total){result();return}
+stopMic();stopRhythm();stopDuetAudio();st.round++;if(st.round>st.total){result();return}
 const rhythm = st.track === 'rhythm';
-st.chord = !rhythm && st.level >= 3 ? makeChord() : null;
-if (!rhythm && !st.chord) {
+const pitchTrack = st.track === 'pitch';
+st.chord = pitchTrack && st.level >= 3 ? makeChord() : null;
+if (pitchTrack && !st.chord) {
 let pool=INTERVALS.filter(x=>x.tier<=st.level);let next=choose(pool);if(st.it&&pool.length>1){for(let k=0;k<10&&next===st.it;k++)next=choose(pool)}
 st.it=next;let sign=st.dir==='mixed'?(Math.random()<.5?1:-1):st.dir==='down'?-1:1;
 let candidates=['C','D','E','F','G','A','B'].map(l=>({l,o:sign===1?4:5,a:0})).filter(n=>{let p=makeNote(n,next,sign);return Math.abs(p.a)<=1&&midi(p)>=55&&midi(p)<=84});
 st.a=choose(candidates.length?candidates:[{l:'C',o:sign===1?4:5,a:0}]);st.b=makeNote(st.a,next,sign);
 }
 st.answered=false;st.stage=0;st.last=-1;st.stable=0;
-$('listenArea').hidden=rhythm||Boolean(st.chord)||st.mode!=='listen';$('singArea').hidden=rhythm||st.mode!=='sing';$('chordArea').hidden=!st.chord;$('feedback').hidden=true;
-$('notationCard').hidden = rhythm;
+$('listenArea').hidden=!pitchTrack||Boolean(st.chord)||st.mode!=='listen';$('singArea').hidden=!pitchTrack||st.mode!=='sing';$('chordArea').hidden=!st.chord;$('feedback').hidden=true;
+$('notationCard').hidden = !pitchTrack;
 $('rhythmArea').hidden = !rhythm;
-const levelName = (rhythm ? RHYTHM_LEVELS[st.rhythmLevel].name : LEVELS[st.level]).toUpperCase();
-$('roundTag').textContent=levelName+' · '+(rhythm?'RHYTHMUS':st.mode==='listen'?'ERKENNEN':'SINGEN');
+$('melodyArea').hidden = pitchTrack || rhythm;
+const levelName = (pitchTrack ? LEVELS[st.level] : rhythm ? RHYTHM_LEVELS[st.rhythmLevel].name : 'Melodie').toUpperCase();
+$('roundTag').textContent=levelName+' · '+(pitchTrack ? (st.mode==='listen'?'ERKENNEN':'SINGEN') : rhythm ? 'RHYTHMUS' : $('melodyType').selectedOptions[0].textContent.toUpperCase());
 $('roundCounter').textContent='AUFGABE '+String(st.round).padStart(2,'0')+' / '+st.total;
 $('progressFill').style.width=(100*(st.round-1)/st.total)+'%';
 $('levelLabel').textContent=levelName;
@@ -330,6 +538,8 @@ $('nextButton').textContent=st.round===st.total?'Ergebnis anzeigen →':'Nächst
 $('correctScore').textContent=st.correct;$('streakScore').textContent=st.streak;
 if(rhythm){
 showRhythmQuestion();
+}else if(!pitchTrack){
+showMelodyQuestion();
 }else if(st.chord){
 showChordQuestion();
 }else if(st.mode==='sing'){
@@ -375,6 +585,8 @@ if (st.track === 'rhythm') {
   } else {
     solution = 'Rhythmus ' + 'ABC'[answer];
   }
+} else if (st.track === 'melody') {
+  solution = finishMelody();
 } else if (st.chord) {
   const { quality, inversion, position } = st.chord;
   solution = isVoicingLevel()
@@ -384,8 +596,10 @@ if (st.track === 'rhythm') {
 } else {
   solution = st.it.label + ' (' + st.it.short + ')';
 }
-if (st.track !== 'rhythm') showScore();
-const f=$('feedback');f.hidden=false;f.className='feedback '+(ok?'good':'bad');f.textContent=(ok?'✓ Richtig! ':'Lösung: ')+solution+'. '+extra;
+if (st.track === 'pitch') showScore();
+const f=$('feedback');f.hidden=false;f.className='feedback '+(ok?'good':'bad');
+const feedbackPrefix = ok ? '✓ Richtig! ' : st.track === 'melody' ? '' : 'Lösung: ';
+f.textContent=feedbackPrefix+solution+'. '+extra;
 $('nextButton').disabled=false;$('checkButton').disabled=true;$('revealButton').disabled=true;
 }
 function check(){let v=$('answerInput').value;if(!v.trim())return $('answerInput').focus();
@@ -403,7 +617,7 @@ function checkChord() {
 }
 function result(){
 stopMic();$('roundCounter').textContent='TRAINING ABGESCHLOSSEN';$('progressFill').style.width='100%';$('promptEyebrow').textContent='DEIN ERGEBNIS';$('promptTitle').textContent=st.correct+' von '+st.total+' richtig';$('promptDescription').textContent=Math.round(st.correct/st.total*100)+'% Trefferquote. Starte eine neue Runde.';
-$('listenArea').hidden=true;$('singArea').hidden=true;$('chordArea').hidden=true;$('rhythmArea').hidden=true;$('feedback').hidden=true;$('revealButton').disabled=true;$('nextButton').disabled=false;$('nextButton').textContent='Noch einmal spielen ↻';hideScore();
+$('listenArea').hidden=true;$('singArea').hidden=true;$('chordArea').hidden=true;$('rhythmArea').hidden=true;$('melodyArea').hidden=true;$('feedback').hidden=true;$('revealButton').disabled=true;$('nextButton').disabled=false;$('nextButton').textContent='Noch einmal spielen ↻';hideScore();
 }
 function y(n){return 132-((n.o*7+LETTERS.indexOf(n.l))-(4*7+2))*10}
 function score(){
@@ -429,8 +643,27 @@ function showScore(){
 }
 function hideScore(){$('scoreWrap').classList.add('is-hidden');$('scorePlaceholder').style.display='flex';$('scorePlaceholder').innerHTML='<span>𝄞</span><p>Entdecke die Noten nach der Lösung</p>';$('noteLegend').textContent='';$('notationHint').textContent='Nach deiner Antwort sichtbar'}
 function audio(){if(!st.ctx)st.ctx=new (window.AudioContext||window.webkitAudioContext)();if(st.ctx.state==='suspended')st.ctx.resume();return st.ctx}
-function tone(note,start,duration=.7,volume=.16){
-let ctx=audio(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='triangle';osc.frequency.value=440*Math.pow(2,(note-69)/12);gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(volume,start+.04);gain.gain.setTargetAtTime(.0001,start+duration-.12,.08);osc.connect(gain);gain.connect(ctx.destination);osc.start(start);osc.stop(start+duration+.2)
+function tone(note,start,duration=.7,volume=.16,destination=null){
+let ctx=audio(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='triangle';osc.frequency.value=440*Math.pow(2,(note-69)/12);gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(volume,start+.04);gain.gain.setTargetAtTime(.0001,start+duration-.12,.08);osc.connect(gain);gain.connect(destination || ctx.destination);osc.start(start);osc.stop(start+duration+.2)
+}
+function stopDuetAudio() {
+  if (st.duetBus) st.duetBus.disconnect();
+  st.duetBus = null;
+}
+
+function playDuet(indices) {
+  stopMic();
+  stopDuetAudio();
+  const ctx = audio();
+  st.duetBus = ctx.createGain();
+  st.duetBus.connect(ctx.destination);
+  const start = ctx.currentTime + .08;
+  for (const voice of indices) {
+    st.melody.voices[voice].forEach((value, index) => {
+      tone(midi(melodyNote(value, voice === 1)), start + index * .62, .53, .16 / indices.length, st.duetBus);
+    });
+  }
+  if (!st.answered) $('melodyStatus').textContent = 'Höre zu. Starte danach das Mikrofon für deine Stimme.';
 }
 function play(){let t=audio().currentTime+.08;tone(midi(st.a),t);tone(midi(st.b),t+.85,.8)}
 function playChord() {
@@ -439,9 +672,14 @@ function playChord() {
   notes.forEach((note, index) => tone(note, start + index * .42, .36));
   notes.forEach(note => tone(note, start + notes.length * .42 + .12, 1, .16 / notes.length));
 }
-function pitch(buf,sampleRate){
+function pitch(buf,sampleRate,preferFundamental=false){
 let mean=0,rms=0;for(let v of buf)mean+=v;mean/=buf.length;for(let v of buf)rms+=(v-mean)**2;rms=Math.sqrt(rms/buf.length);$('meterFill').style.width=Math.min(100,rms*700)+'%';if(rms<.012)return null;
-let best=-1,lagBest=0;for(let lag=Math.floor(sampleRate/950);lag<=Math.min(sampleRate/115,buf.length*.65);lag++){let xy=0,xx=0,yy=0;for(let j=0;j<buf.length-lag;j+=2){let a=buf[j]-mean,b=buf[j+lag]-mean;xy+=a*b;xx+=a*a;yy+=b*b}let c=xy/Math.sqrt(xx*yy+1e-12);if(c>best){best=c;lagBest=lag}}
+const correlations = [];
+let best=-1,lagBest=0;for(let lag=Math.floor(sampleRate/950);lag<=Math.min(sampleRate/115,buf.length*.65);lag++){let xy=0,xx=0,yy=0;for(let j=0;j<buf.length-lag;j+=2){let a=buf[j]-mean,b=buf[j+lag]-mean;xy+=a*b;xx+=a*a;yy+=b*b}let c=xy/Math.sqrt(xx*yy+1e-12);if(preferFundamental)correlations[lag]=c;if(c>best){best=c;lagBest=lag}}
+if(preferFundamental) {
+  const firstPeak = correlations.findIndex((value, lag) => value >= Math.max(.82, best - .06) && value >= correlations[lag-1] && value > correlations[lag+1]);
+  if(firstPeak > 0) lagBest = firstPeak;
+}
 if(best<.82)return null;return 69+12*Math.log2(sampleRate/lagBest/440);
 }
 function loop(){
@@ -458,7 +696,7 @@ try{let stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellatio
 st.stream=stream;st.source=audio().createMediaStreamSource(stream);st.analyser=audio().createAnalyser();st.analyser.fftSize=4096;st.source.connect(st.analyser);$('micButtonLabel').textContent='Mikrofon stoppen';$('micButton').classList.add('recording');$('micStatus').textContent='Singe den Startton';loop()
 }catch(e){$('micStatus').textContent='Mikrofonzugriff nicht möglich';}
 }
-function stopMic(){if(st.raf)cancelAnimationFrame(st.raf);st.raf=0;if(st.source)st.source.disconnect();if(st.stream)st.stream.getTracks().forEach(t=>t.stop());st.source=null;st.stream=null;st.analyser=null;$('meterFill').style.width='0%';$('micButtonLabel').textContent='Mikrofon starten';$('micButton').classList.remove('recording')}
+function stopMic(){if(st.raf)cancelAnimationFrame(st.raf);st.raf=0;if(st.source)st.source.disconnect();if(st.stream)st.stream.getTracks().forEach(t=>t.stop());st.source=null;st.stream=null;st.analyser=null;$('meterFill').style.width='0%';$('micButtonLabel').textContent='Mikrofon starten';$('micButton').classList.remove('recording');$('melodyMic').textContent='Mikrofon starten'}
 function updateStats(){$('bestStreak').textContent=stats.best;$('allCorrect').textContent=stats.total}
 function reset(){st.round=0;st.correct=0;st.streak=0;newQuestion()}
 function setMode(mode) {
@@ -489,11 +727,14 @@ function setTrack(track) {
   if (st.track === track) return;
   st.track = track;
   const rhythm = track === 'rhythm';
-  $('pitchLevels').hidden = rhythm;
-  $('pitchModeSettings').hidden = rhythm;
+  const pitchTrack = track === 'pitch';
+  $('levelHeading').hidden = track === 'melody';
+  $('pitchLevels').hidden = !pitchTrack;
+  $('pitchModeSettings').hidden = !pitchTrack;
   $('rhythmLevels').hidden = !rhythm;
   $('rhythmSettings').hidden = !rhythm;
-  for (const [id, active] of [['pitchTrack', !rhythm], ['rhythmTrack', rhythm]]) {
+  $('melodySettings').hidden = track !== 'melody';
+  for (const [id, active] of [['pitchTrack', pitchTrack], ['rhythmTrack', rhythm], ['melodyTrack', track === 'melody']]) {
     $(id).classList.toggle('active', active);
     $(id).setAttribute('aria-pressed', active);
   }
@@ -501,6 +742,34 @@ function setTrack(track) {
 }
 $('pitchTrack').onclick = () => setTrack('pitch');
 $('rhythmTrack').onclick = () => setTrack('rhythm');
+$('melodyTrack').onclick = () => setTrack('melody');
+$('melodyType').onchange = event => { st.melodyType = event.target.value; reset(); };
+$('melodyStaff').onclick = placeMelodyNote;
+$('melodyCheck').onclick = checkMelody;
+$('melodyMic').onclick = startMelodyMic;
+$('melodyReference').onclick = () => {
+  stopMic();
+  stopDuetAudio();
+  const { target, voices, voice } = st.melody;
+  tone(midi(melodyNote(target[0], voices && voice === 1)), audio().currentTime + .06, .62);
+};
+$('duetVoice').onchange = event => {
+  stopMic();
+  stopDuetAudio();
+  const { voices } = st.melody;
+  const voice = Number(event.target.value);
+  st.melody = { voices, voice, target: voices[voice], step: 0 };
+  $('melodyMic').disabled = false;
+  $('melodyStatus').textContent = 'Die hervorgehobene Note ist als Nächstes dran.';
+  renderMelody();
+};
+$('duetBoth').onclick = () => playDuet([0, 1]);
+$('duetUpper').onclick = () => playDuet([0]);
+$('duetBass').onclick = () => playDuet([1]);
+$('melodyListen').onclick = () => {
+  const start = audio().currentTime + .08;
+  st.melody.target.forEach((value, index) => tone(midi(MELODY_NOTES[value]), start + index * .62, .5));
+};
 document.querySelectorAll('[data-rhythm-level]').forEach((button, index, buttons) => {
   button.onclick = () => {
     st.rhythmLevel = index;
@@ -533,4 +802,5 @@ $('resetProgress').onclick=()=>{if(confirm('Fortschritt zurücksetzen?')){stats.
 $('helpButton').onclick=()=>$('helpDialog').showModal();
 window.addEventListener('pagehide',stopMic);
 window.addEventListener('pagehide',stopRhythm);
+window.addEventListener('pagehide',stopDuetAudio);
 updateStats();reset();

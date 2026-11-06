@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#141727">
   <meta name="description" content="Mini Mozart – Intervalle, Dreiklänge, Umkehrungen, Lagen und Vierklänge hören und im Notenbild erkennen.">
   <title>Mini Mozart · Solfège-Lernspiel</title>
-  <link rel="stylesheet" href="style.css?v=rhythm-tap">
-  <script src="app.js?v=rhythm-tap" defer></script>
+  <link rel="stylesheet" href="style.css?v=melody">
+  <script src="app.js?v=bass-clef" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -24,8 +24,9 @@
           <div class="modes track-choices" role="group" aria-label="Trainingsbereich">
             <button id="pitchTrack" class="modebtn active" aria-pressed="true">Intervalle &amp; Akkorde</button>
             <button id="rhythmTrack" class="modebtn" aria-pressed="false">Rhythmus</button>
+            <button id="melodyTrack" class="modebtn" aria-pressed="false">Melodie</button>
           </div>
-          <div class="blockhead"><span>01 / LEVEL</span><span class="muted">Wähle deine Stufe</span></div>
+          <div id="levelHeading" class="blockhead"><span>01 / LEVEL</span><span class="muted">Wähle deine Stufe</span></div>
           <div id="pitchLevels" class="levelchoices" role="group" aria-label="Schwierigkeitsstufe">
             <button data-level="basic" class="levelbtn active" aria-pressed="true"><span class="levelsymbol">Ⅰ</span><span><strong>Basic</strong><small>Prime bis Quinte</small></span><span class="levelcheck">✓</span></button>
             <button data-level="advanced" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅱ</span><span><strong>Advanced</strong><small>Bis zur Septime</small></span><span class="levelcheck">✓</span></button>
@@ -49,6 +50,7 @@
           <div class="optionblock"><label for="direction">Richtung</label><select id="direction"><option value="up">Aufwärts</option><option value="down">Abwärts</option><option value="mixed">Gemischt</option></select></div>
           </div>
           <div id="rhythmSettings" class="optionblock" hidden><label for="rhythmType">Aufgabentyp</label><select id="rhythmType"><option value="audio">Hören → Notenbild</option><option value="notation">Notenbild → Hören</option><option value="tap">Notenbild → Klopfen</option></select></div>
+          <div id="melodySettings" class="optionblock" hidden><label for="melodyType">Aufgabentyp</label><select id="melodyType"><option value="sing">Blattsingen</option><option value="dictation">Notendiktat</option><option value="duet">Zweistimmiger Satz</option></select></div>
           <div class="separator"></div>
           <div class="statrow"><div><span class="statlabel">Beste Serie</span><strong id="bestStreak">0</strong></div><div><span class="statlabel">Gesamt richtig</span><strong id="allCorrect">0</strong></div></div>
           <button id="resetProgress" class="textbtn">Fortschritt zurücksetzen</button>
@@ -59,6 +61,39 @@
           <div class="gameintro"><div class="question-badge" id="promptSymbol">♪</div><p class="eyebrow" id="promptEyebrow">GEHÖRTRAINING</p><h2 id="promptTitle">Welches Intervall hörst du?</h2><p id="promptDescription" class="promptdesc">Spiele die zwei Töne ab und gib den Intervallnamen ein.</p></div>
           <div class="scoreboard"><span>RICHTIG <b id="correctScore">0</b></span><span>SERIE <b id="streakScore">0</b></span><span>LEVEL <b id="levelLabel">BASIC</b></span></div>
           <div class="notation-card" id="notationCard"><div class="notation-heading"><span>NOTENBILD</span><span id="notationHint">Nach deiner Antwort sichtbar</span></div><div id="scoreWrap" class="scorewrap is-hidden"><svg id="staff" viewBox="0 0 560 190" role="img" aria-label="Zwei Noten im Violinschlüssel" preserveAspectRatio="xMidYMid meet"></svg></div><div id="scorePlaceholder" class="scoreplaceholder"><span>𝄞</span><p>Entdecke die Noten nach der Lösung</p></div><div class="notelegend" id="noteLegend"></div></div>
+          <div id="melodyArea" class="actionarea" hidden>
+            <div id="duetSettings" class="optionblock" hidden>
+              <label for="duetVoice">Welche Stimme möchtest du singen?</label>
+              <select id="duetVoice"><option value="0">Oberstimme</option><option value="1">Unterstimme</option></select>
+            </div>
+            <div class="notation-card melody-score">
+              <div class="notation-heading"><span id="melodyScoreTitle">DEINE PARTITUR</span><span>Violinschlüssel</span></div>
+              <svg id="melodyStaff" viewBox="0 0 560 180" role="img" aria-label="Notensystem für die Melodie"></svg>
+              <div id="duetLower" hidden>
+                <div class="notation-heading"><span>UNTERSTIMME</span><span>Bassschlüssel</span></div>
+                <svg id="duetLowerStaff" viewBox="0 0 560 180" role="img" aria-label="Unterstimme im Bassschlüssel"></svg>
+              </div>
+              <div id="melodyInputs" class="melody-inputs" hidden></div>
+              <p id="melodyStatus" class="answerhint" role="status"></p>
+            </div>
+            <div id="melodySolution" class="notation-card melody-score" hidden>
+              <div class="notation-heading">LÖSUNG</div>
+              <svg id="melodySolutionStaff" viewBox="0 0 560 180" role="img" aria-label="Lösung im Violinschlüssel"></svg>
+            </div>
+            <div class="melody-actions">
+              <button id="melodyReference" class="secondarybtn" type="button">♫ Startton hören</button>
+              <button id="melodyListen" class="secondarybtn" type="button">▶ Melodie anhören</button>
+              <button id="melodyMic" class="primarybtn" type="button">Mikrofon starten</button>
+              <button id="melodyCheck" class="primarybtn" type="button">Prüfen ↗</button>
+            </div>
+            <div id="duetPlayback" class="optionblock" hidden>
+              <div class="melody-actions">
+                <button id="duetBoth" class="secondarybtn" type="button">▶ Beide Stimmen</button>
+                <button id="duetUpper" class="secondarybtn" type="button">▶ Oberstimme</button>
+                <button id="duetBass" class="secondarybtn" type="button">▶ Unterstimme</button>
+              </div>
+            </div>
+          </div>
           <div id="rhythmArea" class="actionarea" hidden>
             <div id="rhythmScore" class="notation-card rhythm-score" hidden></div>
             <button id="playRhythm" class="playbtn" type="button"><span class="playtriangle">▶</span>Rhythmus abspielen</button>
