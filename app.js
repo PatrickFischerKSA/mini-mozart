@@ -80,13 +80,13 @@ $('listenArea').hidden=true;$('singArea').hidden=true;$('feedback').hidden=true;
 }
 function y(n){return 132-((n.o*7+LETTERS.indexOf(n.l))-(4*7+2))*10}
 function score(){
-let s='<g stroke="#9291ab" stroke-width="1.5">'+[52,72,92,112,132].map(v=>'<line x1="55" y1="'+v+'" x2="510" y2="'+v+'"/>').join('')+'</g><text x="76" y="129" font-family="serif" font-size="92" fill="#d7c9f7">𝄞</text>';
+let s='<g stroke="#b3a089" stroke-width="1.5">'+[52,72,92,112,132].map(v=>'<line x1="55" y1="'+v+'" x2="510" y2="'+v+'"/>').join('')+'</g><text x="76" y="129" font-family="serif" font-size="92" fill="#efd4a1">𝄞</text>';
 for(let [n,x] of [[st.a,240],[st.b,393]]){
 let yy=y(n);
-for(let ly=152;ly<=yy;ly+=20)s+='<line x1="'+(x-22)+'" y1="'+ly+'" x2="'+(x+22)+'" y2="'+ly+'" stroke="#aaa4c1"/>';
-for(let ly=32;ly>=yy;ly-=20)s+='<line x1="'+(x-22)+'" y1="'+ly+'" x2="'+(x+22)+'" y2="'+ly+'" stroke="#aaa4c1"/>';
-if(n.a)s+='<text x="'+(x-40)+'" y="'+(yy+10)+'" font-size="33" fill="#d7c9f7">'+(n.a===1?'♯':n.a===-1?'♭':n.a===2?'𝄪':'𝄫')+'</text>';
-s+='<ellipse cx="'+x+'" cy="'+yy+'" rx="13" ry="9" transform="rotate(-18 '+x+' '+yy+')" fill="#f4ecff"/><line x1="'+(x+12)+'" y1="'+yy+'" x2="'+(x+12)+'" y2="'+(yy-55)+'" stroke="#f4ecff" stroke-width="2.4"/>';
+for(let ly=152;ly<=yy;ly+=20)s+='<line x1="'+(x-22)+'" y1="'+ly+'" x2="'+(x+22)+'" y2="'+ly+'" stroke="#c9b397"/>';
+for(let ly=32;ly>=yy;ly-=20)s+='<line x1="'+(x-22)+'" y1="'+ly+'" x2="'+(x+22)+'" y2="'+ly+'" stroke="#c9b397"/>';
+if(n.a)s+='<text x="'+(x-40)+'" y="'+(yy+10)+'" font-size="33" fill="#efd4a1">'+(n.a===1?'♯':n.a===-1?'♭':n.a===2?'𝄪':'𝄫')+'</text>';
+s+='<ellipse cx="'+x+'" cy="'+yy+'" rx="13" ry="9" transform="rotate(-18 '+x+' '+yy+')" fill="#faf0dc"/><line x1="'+(x+12)+'" y1="'+yy+'" x2="'+(x+12)+'" y2="'+(yy-55)+'" stroke="#faf0dc" stroke-width="2.4"/>';
 }
 return s
 }
