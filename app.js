@@ -20,7 +20,7 @@ const INTERVALS=[
 {id:'A5',label:'übermässige Quinte',short:'ü5',degree:5,semitones:8,tier:2}
 ];
 const LETTERS=['C','D','E','F','G','A','B'],NAT={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
-const LEVELS = ['Basic', 'Advanced', 'Profi', 'Dreiklänge', 'Umkehrungen & Lagen', 'Vierklänge'];
+const LEVELS = ['Basic', 'Advanced', 'Profi', 'Dreiklänge', 'Umkehrungen & Lagen', 'Vierklänge', 'Vierklangumkehrungen'];
 const TRIADS = [
   { id: 'dur', label: 'Dur', third: 4, fifth: 7 },
   { id: 'moll', label: 'Moll', third: 3, fifth: 7 },
@@ -34,8 +34,11 @@ const SEVENTH_CHORDS = [
   { id: 'halfDim7', label: 'Halbverminderter Septakkord (m7♭5)', third: 3, fifth: 6, seventh: 10 },
   { id: 'dim7', label: 'Verminderter Septakkord (dim7)', third: 3, fifth: 6, seventh: 9 },
 ];
-const INVERSIONS = ['Grundstellung', '1. Umkehrung', '2. Umkehrung'];
-const POSITIONS = ['Oktavlage', 'Terzlage', 'Quintlage'];
+const INVERSIONS = ['Grundstellung', '1. Umkehrung', '2. Umkehrung', '3. Umkehrung'];
+const POSITIONS = ['Oktavlage', 'Terzlage', 'Quintlage', 'Septimlage'];
+const POSITION_TONES = ['Grundton', 'Terz', 'Quinte', 'Septime'];
+const TRIAD_INVERSIONS = ['', 'Sextakkord', 'Quartsextakkord'];
+const SEVENTH_INVERSIONS = ['', 'Quintsextakkord', 'Terzquartakkord', 'Sekundakkord'];
 const $=s=>document.getElementById(s);
 const st={level:0,mode:'listen',type:'audio',dir:'up',round:0,total:10,correct:0,streak:0,answered:false,ctx:null,stream:null,source:null,analyser:null,raf:0,stage:0,stable:0,last:-1};
 const stats=(()=>{try{return JSON.parse(localStorage.getItem('miniMozartStats')||'{"best":0,"total":0}')}catch{return {best:0,total:0}}})();
@@ -44,22 +47,33 @@ function midi(n){return (n.o+1)*12+NAT[n.l]+n.a}
 function choose(a){return a[Math.floor(Math.random()*a.length)]}
 function makeNote(root,it,sign){let index=LETTERS.indexOf(root.l)+sign*(it.degree-1),l=LETTERS[(index%7+7)%7],o=root.o+Math.floor(index/7),m=midi(root)+sign*it.semitones;return {l,o,a:m-((o+1)*12+NAT[l])}}
 function noteName(n){return (n.l==='B'?(n.a===-1?'B':'H'):n.l)+(n.a===1?'♯':n.a===-1?'♭':n.a===2?'𝄪':n.a===-2?'𝄫':'')+n.o}
+function isVoicingLevel() {
+  return st.level === 4 || st.level === 6;
+}
+
 function makeChord() {
-  const voicing = st.level === 4;
-  const qualities = st.level === 5 ? SEVENTH_CHORDS : TRIADS;
-  const quality = choose(voicing ? qualities.slice(0, 2) : qualities);
-  const inversion = voicing ? choose([0, 1, 2]) : 0;
-  const position = voicing ? choose([0, 1, 2]) : 2;
+  const voicing = isVoicingLevel();
+  const seventh = st.level >= 5;
+  // The diminished seventh chord is symmetric and its inversion is ambiguous by ear.
+  const qualities = seventh
+    ? (voicing ? SEVENTH_CHORDS.filter(chord => chord.id !== 'dim7') : SEVENTH_CHORDS)
+    : (voicing ? TRIADS.slice(0, 2) : TRIADS);
+  const quality = choose(qualities);
   const semitones = [0, quality.third, quality.fifth];
   if (quality.seventh !== undefined) semitones.push(quality.seventh);
   const tones = semitones.map((semitones, index) => ({
     degree: 2 * index + 1, semitones,
   }));
+  const degrees = tones.map((_, index) => index);
+  const inversion = voicing ? choose(degrees) : 0;
+  const position = voicing ? choose(degrees) : degrees.length - 1;
+  const upper = voicing
+    ? degrees.map(index => (position + 1 + index) % degrees.length)
+    : degrees.slice(1);
   const candidates = [3, 4, 5].flatMap(o => LETTERS.map(l => {
     const root = { l, o, a: 0 };
     const notes = [makeNote(root, tones[inversion], 1)];
     // Cycle the upper voices so the requested chord tone is on top.
-    const upper = voicing ? [(position + 1) % 3, (position + 2) % 3, position] : tones.slice(1).map((_, index) => index + 1);
     for (const index of upper) {
       const note = makeNote(root, tones[index], 1);
       while (midi(note) <= midi(notes[notes.length - 1])) note.o++;
@@ -71,12 +85,20 @@ function makeChord() {
 }
 
 function showChordQuestion() {
-  const voicing = st.level === 4;
-  const seventh = st.level === 5;
+  const voicing = isVoicingLevel();
+  const seventh = st.level >= 5;
   const chordName = seventh ? 'Vierklang' : 'Dreiklang';
   const qualities = seventh ? SEVENTH_CHORDS : TRIADS;
-  $('chordQuality').replaceChildren(new Option('Bitte wählen', ''),
-    ...qualities.map(quality => new Option(quality.label, quality.id)));
+  if (voicing) {
+    const names = seventh ? SEVENTH_INVERSIONS : TRIAD_INVERSIONS;
+    $('chordInversion').replaceChildren(new Option('Bitte wählen', ''),
+      ...names.map((name, index) => new Option(name ? INVERSIONS[index] + ' (' + name + ')' : INVERSIONS[index], index)));
+    $('chordPosition').replaceChildren(new Option('Bitte wählen', ''),
+      ...POSITIONS.slice(0, names.length).map((name, index) => new Option(name + ' (' + POSITION_TONES[index] + ' oben)', index)));
+  } else {
+    $('chordQuality').replaceChildren(new Option('Bitte wählen', ''),
+      ...qualities.map(quality => new Option(quality.label, quality.id)));
+  }
   $('chordQualityLabel').textContent = seventh ? 'VIERKLANGTYP' : 'DREIKLANGTYP';
   $('playChordLabel').textContent = chordName + ' abspielen';
   $('chordQualityRow').hidden = voicing;
@@ -87,10 +109,10 @@ function showChordQuestion() {
   }
   $('checkChord').disabled = false;
   $('promptEyebrow').textContent = st.type === 'audio' ? 'GEHÖRTRAINING' : 'NOTENLESEN';
-  $('promptTitle').textContent = voicing ? 'Welche Umkehrung und Lage hat der Dreiklang?' :
+  $('promptTitle').textContent = voicing ? 'Welche Umkehrung und Lage hat der ' + chordName + '?' :
     'Welchen ' + chordName + (st.type === 'audio' ? ' hörst du?' : ' siehst du?');
   $('promptDescription').textContent = voicing
-    ? 'Der tiefste Ton bestimmt die Umkehrung, der höchste die Lage. Du hörst oder siehst Dur- und Molldreiklänge mit einem verdoppelten Akkordton.'
+    ? 'Der tiefste Ton bestimmt die Umkehrung, der höchste die Lage. Ein Akkordton ist verdoppelt.'
     : 'Bestimme den Akkordtyp in Grundstellung.';
   if (st.type === 'audio') hideScore();
   else showScore();
@@ -144,7 +166,7 @@ $('correctScore').textContent=st.correct;$('streakScore').textContent=st.streak;
 let solution;
 if (st.chord) {
   const { quality, inversion, position } = st.chord;
-  solution = st.level === 4
+  solution = isVoicingLevel()
     ? INVERSIONS[inversion] + ' · ' + POSITIONS[position] + ' (' + quality.label + ')'
     : quality.label;
   for (const id of ['chordQuality', 'chordInversion', 'chordPosition', 'checkChord']) $(id).disabled = true;
@@ -160,7 +182,7 @@ finish(correct,enh?'Klanglich enharmonisch gleich.':'')
 }
 function checkChord() {
   const { quality, inversion, position } = st.chord;
-  const answers = st.level === 4
+  const answers = isVoicingLevel()
     ? [['chordInversion', String(inversion)], ['chordPosition', String(position)]]
     : [['chordQuality', quality.id]];
   const missing = answers.find(([id]) => !$(id).value);
@@ -174,7 +196,9 @@ $('listenArea').hidden=true;$('singArea').hidden=true;$('chordArea').hidden=true
 function y(n){return 132-((n.o*7+LETTERS.indexOf(n.l))-(4*7+2))*10}
 function score(){
 let s='<g stroke="#b3a089" stroke-width="1.5">'+[52,72,92,112,132].map(v=>'<line x1="55" y1="'+v+'" x2="510" y2="'+v+'"/>').join('')+'</g><text x="76" y="129" font-family="serif" font-size="92" fill="#efd4a1">𝄞</text>';
-const notes = st.chord ? st.chord.notes.map((note, index) => [note, 205 + index * 90]) : [[st.a,240],[st.b,393]];
+const notes = st.chord
+  ? st.chord.notes.map((note, index) => [note, 205 + index * (st.chord.notes.length === 5 ? 70 : 90)])
+  : [[st.a,240],[st.b,393]];
 for(let [n,x] of notes){
 let yy=y(n);
 for(let ly=152;ly<=yy;ly+=20)s+='<line x1="'+(x-22)+'" y1="'+ly+'" x2="'+(x+22)+'" y2="'+ly+'" stroke="#c9b397"/>';

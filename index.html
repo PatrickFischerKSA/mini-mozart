@@ -7,7 +7,7 @@
   <meta name="description" content="Mini Mozart – Intervalle, Dreiklänge, Umkehrungen, Lagen und Vierklänge hören und im Notenbild erkennen.">
   <title>Mini Mozart · Solfège-Lernspiel</title>
   <link rel="stylesheet" href="style.css">
-  <script src="app.js?v=seventh-chords" defer></script>
+  <script src="app.js?v=seventh-voicings" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -28,6 +28,7 @@
             <button data-level="triads" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅳ</span><span><strong>Dreiklänge</strong><small>Dur, Moll, vermindert, übermässig</small></span><span class="levelcheck">✓</span></button>
             <button data-level="voicings" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅴ</span><span><strong>Umkehrungen &amp; Lagen</strong><small>Basston und obersten Ton bestimmen</small></span><span class="levelcheck">✓</span></button>
             <button data-level="sevenths" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅵ</span><span><strong>Vierklänge</strong><small>Fünf Septakkordtypen in Grundstellung</small></span><span class="levelcheck">✓</span></button>
+            <button data-level="seventh-voicings" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅶ</span><span><strong>Vierklangumkehrungen</strong><small>Umkehrung und Lage bestimmen</small></span><span class="levelcheck">✓</span></button>
           </div>
           <div class="separator"></div>
           <div class="blockhead"><span>02 / TRAINING</span><span class="muted">Deine Disziplin</span></div>
@@ -49,8 +50,8 @@
             <button id="playChord" class="playbtn"><span class="playtriangle">▶</span><span id="playChordLabel">Dreiklang abspielen</span><small>Einzeln von unten nach oben, dann zusammen</small></button>
             <div id="chordQualityRow" class="optionblock"><label id="chordQualityLabel" for="chordQuality">DREIKLANGTYP</label><select id="chordQuality"></select></div>
             <div id="voicingAnswers">
-              <div class="optionblock"><label for="chordInversion">UMKEHRUNG</label><select id="chordInversion"><option value="">Bitte wählen</option><option value="0">Grundstellung</option><option value="1">1. Umkehrung (Sextakkord)</option><option value="2">2. Umkehrung (Quartsextakkord)</option></select></div>
-              <div class="optionblock"><label for="chordPosition">LAGE</label><select id="chordPosition"><option value="">Bitte wählen</option><option value="0">Oktavlage (Grundton oben)</option><option value="1">Terzlage (Terz oben)</option><option value="2">Quintlage (Quinte oben)</option></select></div>
+              <div class="optionblock"><label for="chordInversion">UMKEHRUNG</label><select id="chordInversion"></select></div>
+              <div class="optionblock"><label for="chordPosition">LAGE</label><select id="chordPosition"></select></div>
             </div>
             <button id="checkChord" class="primarybtn">Prüfen ↗</button>
           </div>
