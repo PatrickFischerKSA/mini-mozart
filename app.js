@@ -54,11 +54,35 @@ const RHYTHM_LEVELS = [
   { name: '6/8-Takt', meter: '6/8', pulse: 6, patterns: [
     [6,2,2,2], [2,2,2,6], [4,2,4,2], [2,4,2,4], [6,4,2], [2,4,6],
   ] },
+  { name: '5/8-Takt', meter: '5/8', pulse: 4, groups: [2,3], patterns: [
+    [4,6], [2,2,6], [4,2,2,2], [2,2,4,2], [2,2,2,4], [2,2,2,2,2],
+  ] },
+  { name: '7/8-Takt', meter: '7/8', pulse: 4, groups: [2,2,3], patterns: [
+    [4,4,6], [2,2,4,6], [4,2,2,6], [4,4,2,4], [4,4,4,2], [2,2,4,2,2,2],
+  ] },
+  { name: '13/8-Takt', meter: '13/8', pulse: 4, groups: [2,2,3,3,3], patterns: [
+    [4,4,6,6,6], [2,2,4,6,2,4,6], [4,2,2,6,6,4,2],
+    [4,4,2,4,6,2,2,2], [2,2,2,2,4,2,6,6], [4,4,6,2,2,2,2,4],
+  ] },
+  { name: 'Triolen', meter: '4/4', pulse: 4, subdivision: 3, patterns: [
+    ['triplet',4,4,4], [4,'triplet',4,4], [4,4,'triplet',4],
+    [4,4,4,'triplet'], ['triplet',2,2,4,'triplet'], [2,2,'triplet',4,'triplet'],
+  ] },
+  { name: 'Quintolen', meter: '4/4', pulse: 4, subdivision: 5, patterns: [
+    ['quintuplet',4,4,4], [4,'quintuplet',4,4], [4,4,'quintuplet',4],
+    [4,4,4,'quintuplet'], ['quintuplet','triplet',4,4], [4,'triplet',4,'quintuplet'],
+  ] },
 ];
 const RHYTHM_VALUES = {
   '-4': 'Viertelpause', 1: 'Sechzehntel', 2: 'Achtel',
   4: 'Viertel', 6: 'punktierter Viertel', 8: 'Halbe',
+  triplet: 'Achteltriole', quintuplet: 'Sechzehntelquintole',
 };
+const TUPLET_COUNTS = { triplet: 3, quintuplet: 5 };
+
+function rhythmDuration(value) {
+  return TUPLET_COUNTS[value] ? 4 : Math.abs(value);
+}
 const $=s=>document.getElementById(s);
 const st={level:0,mode:'listen',type:'audio',dir:'up',round:0,total:10,correct:0,streak:0,answered:false,ctx:null,stream:null,source:null,analyser:null,raf:0,stage:0,stable:0,last:-1};
 st.track = 'pitch';
@@ -155,11 +179,34 @@ function showChordQuestion() {
   else showScore();
 }
 
-function rhythmNotation(pattern, meter) {
-  const width = 85 + pattern.length * 29;
-  const label = meter + '-Takt: ' + pattern.map(value => RHYTHM_VALUES[value]).join(', ');
-  const notes = pattern.map((value, index) => {
-    const x = 55 + index * 29;
+function rhythmNotation(pattern, level) {
+  const { meter, groups } = level;
+  const noteWidth = value => TUPLET_COUNTS[value] ? TUPLET_COUNTS[value] * 17 + 12 : 29;
+  const width = 100 + pattern.reduce((sum, value) => sum + noteWidth(value), 0);
+  const grouping = groups ? groups.join('+') : '';
+  const label = meter + '-Takt' + (grouping ? ' (' + grouping + ' Achtel)' : '') + ': ' + pattern.map(value => RHYTHM_VALUES[value]).join(', ');
+  const boundaries = groups ? rhythmPulses(level).slice(1) : [];
+  let offset = 0;
+  let cursor = 72;
+  const notes = pattern.map(value => {
+    const x = cursor;
+    cursor += noteWidth(value);
+    const separator = boundaries.includes(offset)
+      ? '<path d="M' + (x - 14) + ' 12 V43" stroke="currentColor" stroke-dasharray="2 3" opacity=".55"/>' : '';
+    offset += rhythmDuration(value);
+    const tuplet = TUPLET_COUNTS[value];
+    if (tuplet) {
+      const right = (tuplet - 1) * 17 + 8;
+      const heads = Array.from({length: tuplet}, (_, index) => {
+        const column = index * 17;
+        return '<g transform="translate(' + column + ' 0)"><ellipse cy="38" rx="5" ry="3.6" fill="currentColor"/>' +
+          '<path d="M5 38 V16" stroke="currentColor" stroke-width="1.6"/></g>';
+      }).join('');
+      const beams = '<path d="M5 16 H' + (right - 3) + (tuplet === 5 ? ' M5 20 H' + (right - 3) : '') + '" stroke="currentColor" stroke-width="2.6"/>';
+      return separator + '<g transform="translate(' + x + ' 0)">' + heads + beams +
+        '<path d="M-6 13 V10 H' + (right / 2 - 5) + ' M' + (right / 2 + 6) + ' 10 H' + right + ' V13" stroke="currentColor" fill="none"/>' +
+        '<text x="' + (right / 2) + '" y="12" text-anchor="middle" fill="currentColor" font-size="9">' + tuplet + '</text></g>';
+    }
     if (value < 0) {
       return '<path transform="translate(' + x + ' 0)" d="M-3 13 L5 25 L0 32 L6 39 C-2 35 -6 43 1 47" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round"/>';
     }
@@ -168,12 +215,13 @@ function rhythmNotation(pattern, meter) {
     const dot = value === 6 ? '<circle cx="12" cy="34" r="2" fill="currentColor"/>' : '';
     const head = '<ellipse cy="38" rx="7" ry="4.8" transform="rotate(-16 0 38)" fill="' +
       (value === 8 ? 'none' : 'currentColor') + '" stroke="currentColor" stroke-width="2"/>';
-    return '<g transform="translate(' + x + ' 0)">' + head +
+    return separator + '<g transform="translate(' + x + ' 0)">' + head +
       '<path d="M6 37 V11" stroke="currentColor" stroke-width="2"/>' + flags + secondFlag + dot + '</g>';
   }).join('');
   return '<svg viewBox="0 0 ' + width + ' 57" role="img" aria-label="' + label + '">' +
     '<path d="M4 38 H' + (width - 8) + ' v-15" fill="none" stroke="currentColor" opacity=".45"/>' +
-    '<text x="8" y="28" fill="currentColor" font-size="15">' + meter + '</text>' + notes + '</svg>';
+    '<text x="8" y="28" fill="currentColor" font-size="15">' + meter + '</text>' +
+    (grouping ? '<text x="8" y="52" fill="currentColor" font-size="10">' + grouping + '</text>' : '') + notes + '</svg>';
 }
 
 function showRhythmQuestion() {
@@ -186,24 +234,56 @@ function showRhythmQuestion() {
   choices.splice(Math.floor(Math.random() * 3), 0, target);
   st.rhythm = { target, level, choices, answer: choices.indexOf(target) };
   const listening = st.rhythmType === 'audio';
-  const tapping = st.rhythmType === 'tap';
+  const dictation = st.rhythmType === 'dictation';
+  const duet = st.rhythmType === 'duet';
+  const tapping = st.rhythmType === 'tap' || duet;
   $('playRhythm').disabled = false;
-  $('playRhythm').hidden = !listening && !tapping;
-  $('rhythmScore').hidden = listening;
-  $('rhythmScore').innerHTML = listening ? '' : rhythmNotation(target, level.meter);
-  $('rhythmChoices').hidden = tapping;
+  $('playRhythm').hidden = duet || (!listening && !tapping && !dictation);
+  $('rhythmScore').hidden = listening || dictation || duet;
+  $('rhythmScore').innerHTML = $('rhythmScore').hidden ? '' : rhythmNotation(target, level);
+  $('rhythmChoices').hidden = tapping || dictation;
   $('rhythmTapArea').hidden = !tapping;
+  $('rhythmEditor').hidden = !dictation;
+  $('rhythmDuet').hidden = !duet;
+  setRhythmDuetControls(false);
   $('promptEyebrow').textContent = 'RHYTHMUS · ' + level.meter + '-TAKT';
-  $('promptTitle').textContent = tapping ? 'Kannst du den Rhythmus klopfen?'
+  $('promptTitle').textContent = duet ? 'Kannst du deine Rhythmusstimme klopfen?'
+    : dictation ? 'Kannst du den gehörten Rhythmus notieren?'
+    : tapping ? 'Kannst du den Rhythmus klopfen?'
     : listening ? 'Welchen Rhythmus hörst du?' : 'Welcher Klang passt zum Notenbild?';
-  $('promptDescription').textContent = listening
-    ? 'Höre den Takt an und wähle das passende Notenbild.'
+  $('promptDescription').textContent = dictation
+    ? 'Höre den Takt an und setze Notenwerte und Pausen von links nach rechts ein.'
+    : duet ? 'Höre beide Stimmen zusammen oder einzeln. Klopfe dann deine Stimme zur anderen.'
+    : listening ? 'Höre den Takt an und wähle das passende Notenbild.'
     : tapping ? 'Klopfe einmal pro Note. Bei einer Pause wartest du bis zur nächsten Note.'
       : 'Höre die drei Beispiele an und wähle das passende aus.';
   if (tapping) {
     $('startRhythmTap').disabled = false;
     $('rhythmPad').disabled = true;
     $('rhythmTapStatus').textContent = 'Warte beim Einzählen einen Takt. Klopfe ab dem nächsten betonten Klick.';
+    if (duet) {
+      st.rhythm.voices = [target, first];
+      selectRhythmVoice();
+    }
+    return;
+  }
+  if (dictation) {
+    st.rhythm.draft = [];
+    $('rhythmEditorMeter').textContent = level.meter + '-Takt';
+    const values = [...new Set(level.patterns.flat())].sort((a, b) => rhythmDuration(a) - rhythmDuration(b));
+    $('rhythmPalette').replaceChildren(...values.map(value => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'secondarybtn';
+      button.textContent = RHYTHM_VALUES[value];
+      button.dataset.value = value;
+      button.onclick = () => {
+        st.rhythm.draft.push(value);
+        renderRhythmDraft();
+      };
+      return button;
+    }));
+    renderRhythmDraft();
     return;
   }
   $('rhythmChoices').replaceChildren(...choices.map((pattern, index) => {
@@ -221,7 +301,7 @@ function showRhythmQuestion() {
     const answer = document.createElement('button');
     answer.type = 'button';
     answer.className = 'levelbtn rhythm-answer';
-    answer.innerHTML = listening ? '<strong>' + letter + '</strong>' + rhythmNotation(pattern, level.meter)
+    answer.innerHTML = listening ? '<strong>' + letter + '</strong>' + rhythmNotation(pattern, level)
       : '<strong>' + letter + ' auswählen</strong>';
     answer.onclick = () => {
       st.rhythm.selected = index;
@@ -232,7 +312,60 @@ function showRhythmQuestion() {
   }));
 }
 
-function playRhythm(pattern = []) {
+function rhythmLength(level) {
+  const [beats, denominator] = level.meter.split('/').map(Number);
+  return beats * 16 / denominator;
+}
+
+function rhythmPulses(level) {
+  if (level.groups) {
+    let offset = 0;
+    return level.groups.map(group => {
+      const start = offset;
+      offset += group * 2;
+      return start;
+    });
+  }
+  return Array.from({length: rhythmLength(level) / level.pulse}, (_, index) => index * level.pulse);
+}
+
+function renderRhythmDraft() {
+  const { draft, level } = st.rhythm;
+  const length = rhythmLength(level);
+  const used = draft.reduce((sum, value) => sum + rhythmDuration(value), 0);
+  $('rhythmDraft').innerHTML = rhythmNotation(draft, level);
+  const remaining = length - used;
+  const buttons = [...$('rhythmPalette').querySelectorAll('button')];
+  const shortest = Math.min(...buttons.map(button => rhythmDuration(button.dataset.value)));
+  $('rhythmEditorStatus').textContent = remaining === 0 ? 'Der Takt ist vollständig.'
+    : 'Noch Platz für ' + remaining + (remaining === 1 ? ' Sechzehntel.' : ' Sechzehntelwerte.');
+  buttons.forEach(button => {
+    const leftover = remaining - rhythmDuration(button.dataset.value);
+    button.disabled = st.answered || leftover < 0 || leftover % shortest !== 0;
+  });
+  $('rhythmUndo').disabled = st.answered || !draft.length;
+  $('rhythmDraftPlay').disabled = !draft.length;
+  $('rhythmDictationCheck').disabled = st.answered || remaining !== 0;
+}
+
+function selectRhythmVoice() {
+  const { voices, level } = st.rhythm;
+  const voice = Number($('rhythmVoice').value);
+  st.rhythm.target = voices[voice];
+  $('rhythmVoiceScores').replaceChildren(...voices.map((pattern, index) => {
+    const row = document.createElement('div');
+    row.className = 'notation-card rhythm-score' + (voice === index ? ' rhythm-voice-active' : '');
+    row.innerHTML = '<div class="notation-heading">Stimme ' + (index + 1) +
+      (voice === index ? ' · deine Stimme' : ' · Begleitung') + '</div>' + rhythmNotation(pattern, level);
+    return row;
+  }));
+}
+
+function setRhythmDuetControls(disabled) {
+  for (const id of ['rhythmVoice', 'rhythmBoth', 'rhythmOne', 'rhythmTwo']) $(id).disabled = disabled;
+}
+
+function playRhythm(pattern = [], lowerPattern = []) {
   stopRhythm();
   const { level } = st.rhythm;
   const ctx = audio();
@@ -240,7 +373,7 @@ function playRhythm(pattern = []) {
   bus.connect(ctx.destination);
   st.rhythmBus = bus;
   const unit = .66 / level.pulse;
-  const length = level.meter === '6/8' ? 12 : 16;
+  const length = rhythmLength(level);
   const start = ctx.currentTime + .05;
   function hit(at, frequency, volume, duration, type) {
     const oscillator = ctx.createOscillator();
@@ -254,14 +387,23 @@ function playRhythm(pattern = []) {
     oscillator.start(at);
     oscillator.stop(at + duration);
   }
-  for (let step = 0; step < length * 2; step += level.pulse) {
-    hit(start + step * unit, step % length === 0 ? 820 : 610, step < length ? .10 : .035, .045, 'sine');
+  for (const offset of rhythmPulses(level)) {
+    hit(start + offset * unit, offset === 0 ? 820 : 610, .10, .045, 'sine');
+    hit(start + (length + offset) * unit, offset === 0 ? 820 : 610, .035, .045, 'sine');
   }
-  let step = length;
-  for (const value of pattern) {
-    if (value > 0) hit(start + step * unit, 320, .21, value * unit * .85, 'triangle');
-    step += Math.abs(value);
-  }
+  [pattern, lowerPattern].forEach((line, voice) => {
+    let step = length;
+    for (const value of line) {
+      const count = TUPLET_COUNTS[value] || (value > 0 ? 1 : 0);
+      const duration = rhythmDuration(value);
+      for (let index = 0; index < count; index++) {
+        const spacing = duration * unit / count;
+        hit(start + step * unit + index * spacing, voice === 0 ? 320 : 155,
+          voice === 0 ? .21 : .16, spacing * .85, 'triangle');
+      }
+      step += duration;
+    }
+  });
   return { start: start + length * unit, end: start + 2 * length * unit, unit };
 }
 
@@ -280,8 +422,12 @@ function expectedTaps(pattern, unit) {
   const times = [];
   let position = 0;
   for (const value of pattern) {
-    if (value > 0) times.push(position * unit);
-    position += Math.abs(value);
+    const count = TUPLET_COUNTS[value] || (value > 0 ? 1 : 0);
+    const duration = rhythmDuration(value);
+    for (let index = 0; index < count; index++) {
+      times.push((position + index * duration / count) * unit);
+    }
+    position += duration;
   }
   return times;
 }
@@ -290,11 +436,17 @@ async function startRhythmTap() {
   const question = st.rhythm;
   $('startRhythmTap').disabled = true;
   $('playRhythm').disabled = true;
+  setRhythmDuetControls(true);
   const ctx = audio();
   if (ctx.state === 'suspended') await ctx.resume();
   if (st.track !== 'rhythm' || st.rhythm !== question || st.answered) return;
-  const timing = playRhythm();
-  const tap = { ...timing, times: [], tolerance: Math.min(.13, timing.unit * .65) };
+  const voice = Number($('rhythmVoice').value);
+  const timing = question.voices
+    ? playRhythm(voice === 1 ? question.voices[0] : [], voice === 0 ? question.voices[1] : [])
+    : playRhythm();
+  const subdivision = question.level.subdivision;
+  const tolerance = subdivision ? timing.unit * 4 / subdivision * .46 : Math.min(.13, timing.unit * .65);
+  const tap = { ...timing, times: [], tolerance };
   st.tap = tap;
   $('rhythmPad').disabled = false;
   $('rhythmPad').focus();
@@ -623,16 +775,30 @@ function explainAnswer(revealed) {
   if (st.track === 'rhythm') {
     const { target, level, selected, choices, answer } = st.rhythm;
     const lines = ['Notenwerte im ' + level.meter + '-Takt: ' + target.map(value => RHYTHM_VALUES[value]).join(' – ') + '.'];
-    if (st.rhythmType === 'tap') {
+    if (st.rhythmType === 'tap' || st.rhythmType === 'duet') {
+      if (st.rhythmType === 'duet') lines.unshift('Bewertet wird Stimme ' + (Number($('rhythmVoice').value) + 1) + '. Die andere Stimme gibt dir einen zweiten rhythmischen Bezug.');
       lines.push('Jede Note beginnt mit einem Klopfimpuls. Pausen und ausgehaltene Noten verschieben den nächsten Impuls.');
+    } else if (st.rhythmType === 'dictation') {
+      const { draft } = st.rhythm;
+      const mismatch = target.findIndex((value, index) => value !== draft[index]);
+      if (draft.length && mismatch !== -1) {
+        const firstDifference = target.slice(0, mismatch).reduce((sum, value) => sum + rhythmDuration(value), 0);
+        const beat = rhythmPulses(level).filter(offset => offset <= firstDifference).length;
+        lines.unshift('Ab Zeichen ' + (mismatch + 1) + ' (Grundschlag ' + beat + ') weicht deine Eingabe ab: ' +
+          (RHYTHM_VALUES[draft[mismatch]] || 'kein Zeichen') + ' statt ' + RHYTHM_VALUES[target[mismatch]] + '.');
+      } else if (mismatch === -1) {
+        lines.push('Notenwerte, Pausen und Reihenfolge stimmen mit dem gehörten Takt überein.');
+      }
     } else if (selected !== undefined && selected !== answer) {
       const guess = choices[selected];
       const index = target.findIndex((value, i) => value !== guess[i]);
       if (index !== -1) lines.unshift('Deine Wahl ' + 'ABC'[selected] + ' weicht ab Zeichen ' + (index + 1) +
         ' ab: ' + (RHYTHM_VALUES[guess[index]] || 'kein weiteres Zeichen') + ' statt ' + RHYTHM_VALUES[target[index]] + '.');
     } else {
-      lines.push(level.meter === '6/8' ? 'Zähle zwei Gruppen zu je drei Achteln.' : 'Zähle vier Viertelschläge und achte auf die Unterteilung dazwischen.');
+      if (!level.groups) lines.push(level.meter === '6/8' ? 'Zähle zwei Gruppen zu je drei Achteln.' : 'Zähle vier Viertelschläge und achte auf die Unterteilung dazwischen.');
     }
+    if (level.groups) lines.push('Gruppierung: ' + level.groups.join(' + ') + ' Achtel. Der Grundpuls betont den Anfang jeder Gruppe.');
+    if (level.subdivision) lines.push('Die Zahl über der Gruppe zeigt, wie viele gleichmässige Noten auf einen Viertelschlag kommen: 3 für Triolen, 5 für Quintolen.');
     return lines;
   }
   if (st.chord) {
@@ -679,17 +845,24 @@ let solution;
 if (st.track === 'rhythm') {
   stopRhythm();
   const { answer, target, level } = st.rhythm;
-  $('rhythmScore').innerHTML = rhythmNotation(target, level.meter);
-  $('rhythmScore').hidden = false;
+  const duet = st.rhythmType === 'duet';
+  const dictation = st.rhythmType === 'dictation';
+  $('rhythmScore').innerHTML = (dictation ? '<div class="notation-heading">LÖSUNG</div>' : '') + rhythmNotation(target, level);
+  $('rhythmScore').hidden = duet;
   $('rhythmChoices').querySelectorAll('.rhythm-answer').forEach((button, index) => {
     button.disabled = true;
     if (index === answer) button.classList.add('active');
   });
-  if (st.rhythmType === 'tap') {
+  if (st.rhythmType === 'tap' || duet) {
     $('startRhythmTap').disabled = true;
     $('playRhythm').disabled = false;
     $('rhythmTapStatus').textContent = '';
-    solution = 'Rhythmus im Notenbild';
+    setRhythmDuetControls(false);
+    $('rhythmVoice').disabled = duet;
+    solution = duet ? 'Stimme ' + (Number($('rhythmVoice').value) + 1) : 'Rhythmus im Notenbild';
+  } else if (dictation) {
+    renderRhythmDraft();
+    solution = 'Rhythmusdiktat';
   } else {
     solution = 'Rhythmus ' + 'ABC'[answer];
   }
@@ -907,6 +1080,16 @@ document.querySelectorAll('[data-rhythm-level]').forEach((button, index, buttons
 });
 $('rhythmType').onchange = event => { st.rhythmType = event.target.value; reset(); };
 $('playRhythm').onclick = () => playRhythm(st.rhythm.target);
+$('rhythmUndo').onclick = () => { st.rhythm.draft.pop(); renderRhythmDraft(); };
+$('rhythmDraftPlay').onclick = () => playRhythm(st.rhythm.draft);
+$('rhythmDictationCheck').onclick = () => {
+  const { draft, target } = st.rhythm;
+  finish(draft.length === target.length && draft.every((value, index) => value === target[index]));
+};
+$('rhythmVoice').onchange = () => { stopRhythm(); selectRhythmVoice(); };
+$('rhythmBoth').onclick = () => playRhythm(...st.rhythm.voices);
+$('rhythmOne').onclick = () => playRhythm(st.rhythm.voices[0]);
+$('rhythmTwo').onclick = () => playRhythm([], st.rhythm.voices[1]);
 $('startRhythmTap').onclick = startRhythmTap;
 $('rhythmPad').onclick = recordRhythmTap;
 $('rhythmPad').onkeydown = event => {

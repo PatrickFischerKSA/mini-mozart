@@ -94,6 +94,20 @@ body::before {
   margin-bottom: 14px;
 }
 
+.rhythm-voice-active {
+  border-color: #e5ba78;
+}
+
+.rhythm-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 8px;
+}
+
+#rhythmDraft svg {
+  width: 100%;
+}
+
 .rhythm-choices {
   display: grid;
   gap: 8px;

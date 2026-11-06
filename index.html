@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#141727">
   <meta name="description" content="Mini Mozart – Intervalle, Dreiklänge, Umkehrungen, Lagen und Vierklänge hören und im Notenbild erkennen.">
   <title>Mini Mozart · Solfège-Lernspiel</title>
-  <link rel="stylesheet" href="style.css?v=feedback">
-  <script src="app.js?v=feedback" defer></script>
+  <link rel="stylesheet" href="style.css?v=rhythm-workspace">
+  <script src="app.js?v=tuplets" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -41,6 +41,11 @@
             <button data-rhythm-level="1" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅱ</span><span><strong>Pausen &amp; Punktierungen</strong><small>Viertelpausen und punktierte Viertel</small></span><span class="levelcheck">✓</span></button>
             <button data-rhythm-level="2" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅲ</span><span><strong>Synkopen &amp; Sechzehntel</strong><small>Zwischenschläge im 4/4-Takt</small></span><span class="levelcheck">✓</span></button>
             <button data-rhythm-level="3" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅳ</span><span><strong>6/8-Takt</strong><small>Zwei Hauptschläge mit je drei Achteln</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="4" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅴ</span><span><strong>5/8-Takt</strong><small>Zwei plus drei Achtel</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="5" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅵ</span><span><strong>7/8-Takt</strong><small>Zwei plus zwei plus drei Achtel</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="6" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅶ</span><span><strong>13/8-Takt</strong><small>2 + 2 + 3 + 3 + 3 Achtel</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="7" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅷ</span><span><strong>Triolen</strong><small>Drei gleichmässige Töne auf einem Viertelschlag</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="8" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅸ</span><span><strong>Quintolen</strong><small>Fünf gleichmässige Töne auf einem Viertelschlag</small></span><span class="levelcheck">✓</span></button>
           </div>
           <div class="separator"></div>
           <div id="pitchModeSettings">
@@ -49,7 +54,7 @@
           <div id="listenOptions" class="optionblock"><label for="questionType">Aufgabentyp</label><select id="questionType"><option value="audio">Hören → Begriff</option><option value="notation">Notenbild → Begriff</option></select></div>
           <div class="optionblock"><label for="direction">Richtung</label><select id="direction"><option value="up">Aufwärts</option><option value="down">Abwärts</option><option value="mixed">Gemischt</option></select></div>
           </div>
-          <div id="rhythmSettings" class="optionblock" hidden><label for="rhythmType">Aufgabentyp</label><select id="rhythmType"><option value="audio">Hören → Notenbild</option><option value="notation">Notenbild → Hören</option><option value="tap">Notenbild → Klopfen</option></select></div>
+          <div id="rhythmSettings" class="optionblock" hidden><label for="rhythmType">Aufgabentyp</label><select id="rhythmType"><option value="audio">Hören → Notenbild</option><option value="notation">Notenbild → Hören</option><option value="tap">Notenbild → Klopfen</option><option value="dictation">Rhythmusdiktat</option><option value="duet">Zweistimmiger Rhythmus</option></select></div>
           <div id="melodySettings" class="optionblock" hidden><label for="melodyType">Aufgabentyp</label><select id="melodyType"><option value="sing">Blattsingen</option><option value="dictation">Notendiktat</option><option value="duet">Zweistimmiger Satz</option></select></div>
           <div class="separator"></div>
           <div class="statrow"><div><span class="statlabel">Beste Serie</span><strong id="bestStreak">0</strong></div><div><span class="statlabel">Gesamt richtig</span><strong id="allCorrect">0</strong></div></div>
@@ -96,8 +101,31 @@
           </div>
           <div id="rhythmArea" class="actionarea" hidden>
             <div id="rhythmScore" class="notation-card rhythm-score" hidden></div>
+            <div id="rhythmDuet" hidden>
+              <div class="optionblock"><label for="rhythmVoice">Welche Stimme klopfst du?</label><select id="rhythmVoice"><option value="0">Stimme 1 · hoher Klang</option><option value="1">Stimme 2 · tiefer Klang</option></select></div>
+              <div id="rhythmVoiceScores"></div>
+              <div class="melody-actions">
+                <button class="secondarybtn" id="rhythmBoth" type="button">▶ Beide Stimmen</button>
+                <button class="secondarybtn" id="rhythmOne" type="button">▶ Stimme 1</button>
+                <button class="secondarybtn" id="rhythmTwo" type="button">▶ Stimme 2</button>
+              </div>
+              <p class="answerhint">Beim Klopfen läuft die jeweils andere Stimme mit.</p>
+            </div>
             <button id="playRhythm" class="playbtn" type="button"><span class="playtriangle">▶</span>Rhythmus abspielen</button>
             <p class="answerhint">Ein Takt Vorzählen. Danach hörst du den Rhythmus mit leisem Grundpuls.</p>
+            <div id="rhythmEditor" hidden>
+              <div class="notation-card rhythm-score">
+                <div class="notation-heading"><span>DEIN RHYTHMUS</span><span id="rhythmEditorMeter"></span></div>
+                <div id="rhythmDraft"></div>
+                <p id="rhythmEditorStatus" class="answerhint" role="status"></p>
+              </div>
+              <div id="rhythmPalette" class="rhythm-palette" role="group" aria-label="Notenwerte und Pausen"></div>
+              <div class="melody-actions optionblock">
+                <button id="rhythmUndo" class="secondarybtn" type="button">Letztes Zeichen entfernen</button>
+                <button id="rhythmDraftPlay" class="secondarybtn" type="button">▶ Eingabe anhören</button>
+                <button id="rhythmDictationCheck" class="primarybtn" type="button">Prüfen ↗</button>
+              </div>
+            </div>
             <div id="rhythmChoices" class="rhythm-choices" role="group" aria-label="Rhythmus auswählen"></div>
             <div id="rhythmTapArea" hidden>
               <div class="rhythm-choice">
