@@ -31,3 +31,54 @@ body::before {
 .optionblock select {
   background-color: #1c151040;
 }
+
+.track-choices {
+  margin-bottom: 22px;
+}
+
+.track-choices .modebtn {
+  justify-content: center;
+}
+
+.levelchoices[hidden],
+#rhythmChoices[hidden],
+#playRhythm[hidden] {
+  display: none;
+}
+
+#rhythmPad {
+  touch-action: manipulation;
+}
+
+.rhythm-score {
+  min-height: 0;
+  margin-bottom: 14px;
+}
+
+.rhythm-choices {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rhythm-choice {
+  display: flex;
+  gap: 8px;
+}
+
+.rhythm-choice > button {
+  flex: 1;
+  min-width: 0;
+}
+
+.rhythm-answer.active:disabled {
+  opacity: 1;
+}
+
+.rhythm-score svg,
+.rhythm-answer svg {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  color: #faf0dc;
+}

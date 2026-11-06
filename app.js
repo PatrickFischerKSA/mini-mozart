@@ -39,8 +39,31 @@ const POSITIONS = ['Oktavlage', 'Terzlage', 'Quintlage', 'Septimlage'];
 const POSITION_TONES = ['Grundton', 'Terz', 'Quinte', 'Septime'];
 const TRIAD_INVERSIONS = ['', 'Sextakkord', 'Quartsextakkord'];
 const SEVENTH_INVERSIONS = ['', 'Quintsextakkord', 'Terzquartakkord', 'Sekundakkord'];
+// Durations are in sixteenth notes. A negative value is a rest.
+const RHYTHM_LEVELS = [
+  { name: 'Grundpuls', meter: '4/4', pulse: 4, patterns: [
+    [4,4,8], [8,4,4], [4,2,2,4,4], [2,2,4,4,4], [4,4,4,2,2], [4,4,2,2,4],
+  ] },
+  { name: 'Pausen & Punktierungen', meter: '4/4', pulse: 4, patterns: [
+    [6,2,-4,4], [-4,4,6,2], [4,-4,6,2], [6,2,4,-4], [4,4,-4,2,2], [2,2,-4,6,2],
+  ] },
+  { name: 'Synkopen & Sechzehntel', meter: '4/4', pulse: 4, patterns: [
+    [2,4,2,1,1,2,4], [1,1,2,4,2,4,2], [4,2,4,2,1,1,2],
+    [2,4,2,4,2,1,1], [1,1,1,1,2,4,2,4], [4,1,1,1,1,2,4,2],
+  ] },
+  { name: '6/8-Takt', meter: '6/8', pulse: 6, patterns: [
+    [6,2,2,2], [2,2,2,6], [4,2,4,2], [2,4,2,4], [6,4,2], [2,4,6],
+  ] },
+];
+const RHYTHM_VALUES = {
+  '-4': 'Viertelpause', 1: 'Sechzehntel', 2: 'Achtel',
+  4: 'Viertel', 6: 'punktierter Viertel', 8: 'Halbe',
+};
 const $=s=>document.getElementById(s);
 const st={level:0,mode:'listen',type:'audio',dir:'up',round:0,total:10,correct:0,streak:0,answered:false,ctx:null,stream:null,source:null,analyser:null,raf:0,stage:0,stable:0,last:-1};
+st.track = 'pitch';
+st.rhythmLevel = 0;
+st.rhythmType = 'audio';
 const stats=(()=>{try{return JSON.parse(localStorage.getItem('miniMozartStats')||'{"best":0,"total":0}')}catch{return {best:0,total:0}}})();
 function save(){localStorage.setItem('miniMozartStats',JSON.stringify(stats))}
 function midi(n){return (n.o+1)*12+NAT[n.l]+n.a}
@@ -118,25 +141,196 @@ function showChordQuestion() {
   else showScore();
 }
 
+function rhythmNotation(pattern, meter) {
+  const width = 85 + pattern.length * 29;
+  const label = meter + '-Takt: ' + pattern.map(value => RHYTHM_VALUES[value]).join(', ');
+  const notes = pattern.map((value, index) => {
+    const x = 55 + index * 29;
+    if (value < 0) {
+      return '<path transform="translate(' + x + ' 0)" d="M-3 13 L5 25 L0 32 L6 39 C-2 35 -6 43 1 47" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round"/>';
+    }
+    const flags = value < 4 ? '<path d="M6 12 Q15 17 13 26" fill="none" stroke="currentColor" stroke-width="2"/>' : '';
+    const secondFlag = value === 1 ? '<path d="M6 19 Q15 24 13 33" fill="none" stroke="currentColor" stroke-width="2"/>' : '';
+    const dot = value === 6 ? '<circle cx="12" cy="34" r="2" fill="currentColor"/>' : '';
+    const head = '<ellipse cy="38" rx="7" ry="4.8" transform="rotate(-16 0 38)" fill="' +
+      (value === 8 ? 'none' : 'currentColor') + '" stroke="currentColor" stroke-width="2"/>';
+    return '<g transform="translate(' + x + ' 0)">' + head +
+      '<path d="M6 37 V11" stroke="currentColor" stroke-width="2"/>' + flags + secondFlag + dot + '</g>';
+  }).join('');
+  return '<svg viewBox="0 0 ' + width + ' 57" role="img" aria-label="' + label + '">' +
+    '<path d="M4 38 H' + (width - 8) + ' v-15" fill="none" stroke="currentColor" opacity=".45"/>' +
+    '<text x="8" y="28" fill="currentColor" font-size="15">' + meter + '</text>' + notes + '</svg>';
+}
+
+function showRhythmQuestion() {
+  const level = RHYTHM_LEVELS[st.rhythmLevel];
+  const previous = st.rhythm?.target;
+  const target = choose(level.patterns.filter(pattern => pattern !== previous));
+  const alternatives = level.patterns.filter(pattern => pattern !== target);
+  const first = choose(alternatives);
+  const choices = [first, choose(alternatives.filter(pattern => pattern !== first))];
+  choices.splice(Math.floor(Math.random() * 3), 0, target);
+  st.rhythm = { target, level, answer: choices.indexOf(target) };
+  const listening = st.rhythmType === 'audio';
+  const tapping = st.rhythmType === 'tap';
+  $('playRhythm').disabled = false;
+  $('playRhythm').hidden = !listening && !tapping;
+  $('rhythmScore').hidden = listening;
+  $('rhythmScore').innerHTML = listening ? '' : rhythmNotation(target, level.meter);
+  $('rhythmChoices').hidden = tapping;
+  $('rhythmTapArea').hidden = !tapping;
+  $('promptEyebrow').textContent = 'RHYTHMUS · ' + level.meter + '-TAKT';
+  $('promptTitle').textContent = tapping ? 'Kannst du den Rhythmus klopfen?'
+    : listening ? 'Welchen Rhythmus hörst du?' : 'Welcher Klang passt zum Notenbild?';
+  $('promptDescription').textContent = listening
+    ? 'Höre den Takt an und wähle das passende Notenbild.'
+    : tapping ? 'Klopfe einmal pro Note. Bei einer Pause wartest du bis zur nächsten Note.'
+      : 'Höre die drei Beispiele an und wähle das passende aus.';
+  if (tapping) {
+    $('startRhythmTap').disabled = false;
+    $('rhythmPad').disabled = true;
+    $('rhythmTapStatus').textContent = 'Warte beim Einzählen einen Takt. Klopfe ab dem nächsten betonten Klick.';
+    return;
+  }
+  $('rhythmChoices').replaceChildren(...choices.map((pattern, index) => {
+    const row = document.createElement('div');
+    row.className = 'rhythm-choice';
+    const letter = 'ABC'[index];
+    if (!listening) {
+      const play = document.createElement('button');
+      play.type = 'button';
+      play.className = 'secondarybtn';
+      play.textContent = '▶ ' + letter + ' anhören';
+      play.onclick = () => playRhythm(pattern);
+      row.append(play);
+    }
+    const answer = document.createElement('button');
+    answer.type = 'button';
+    answer.className = 'levelbtn rhythm-answer';
+    answer.innerHTML = listening ? '<strong>' + letter + '</strong>' + rhythmNotation(pattern, level.meter)
+      : '<strong>' + letter + ' auswählen</strong>';
+    answer.onclick = () => finish(index === st.rhythm.answer);
+    row.append(answer);
+    return row;
+  }));
+}
+
+function playRhythm(pattern = []) {
+  stopRhythm();
+  const { level } = st.rhythm;
+  const ctx = audio();
+  const bus = ctx.createGain();
+  bus.connect(ctx.destination);
+  st.rhythmBus = bus;
+  const unit = .66 / level.pulse;
+  const length = level.meter === '6/8' ? 12 : 16;
+  const start = ctx.currentTime + .05;
+  function hit(at, frequency, volume, duration, type) {
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = type;
+    oscillator.frequency.value = frequency;
+    gain.gain.setValueAtTime(volume, at);
+    gain.gain.exponentialRampToValueAtTime(.001, at + duration);
+    oscillator.connect(gain);
+    gain.connect(bus);
+    oscillator.start(at);
+    oscillator.stop(at + duration);
+  }
+  for (let step = 0; step < length * 2; step += level.pulse) {
+    hit(start + step * unit, step % length === 0 ? 820 : 610, step < length ? .10 : .035, .045, 'sine');
+  }
+  let step = length;
+  for (const value of pattern) {
+    if (value > 0) hit(start + step * unit, 320, .21, value * unit * .85, 'triangle');
+    step += Math.abs(value);
+  }
+  return { start: start + length * unit, end: start + 2 * length * unit, unit };
+}
+
+function stopRhythm() {
+  if (st.rhythmBus) st.rhythmBus.disconnect();
+  st.rhythmBus = null;
+  if (st.tap) {
+    clearTimeout(st.tap.begin);
+    clearTimeout(st.tap.finish);
+    st.tap = null;
+    $('rhythmPad').disabled = true;
+  }
+}
+
+function expectedTaps(pattern, unit) {
+  const times = [];
+  let position = 0;
+  for (const value of pattern) {
+    if (value > 0) times.push(position * unit);
+    position += Math.abs(value);
+  }
+  return times;
+}
+
+async function startRhythmTap() {
+  const question = st.rhythm;
+  $('startRhythmTap').disabled = true;
+  $('playRhythm').disabled = true;
+  const ctx = audio();
+  if (ctx.state === 'suspended') await ctx.resume();
+  if (st.track !== 'rhythm' || st.rhythm !== question || st.answered) return;
+  const timing = playRhythm();
+  const tap = { ...timing, times: [], tolerance: Math.min(.13, timing.unit * .65) };
+  st.tap = tap;
+  $('rhythmPad').disabled = false;
+  $('rhythmPad').focus();
+  $('rhythmTapStatus').textContent = 'Einzählen …';
+  tap.begin = setTimeout(() => {
+    $('rhythmTapStatus').textContent = 'Jetzt klopfen.';
+  }, (tap.start - ctx.currentTime) * 1000);
+  tap.finish = setTimeout(() => {
+    const expected = expectedTaps(question.target, tap.unit);
+    const sameCount = tap.times.length === expected.length;
+    const correct = sameCount && expected.every((time, index) => Math.abs(tap.times[index] - time) <= tap.tolerance);
+    const detail = sameCount
+      ? (correct ? 'Alle Schläge waren im Takt.' : 'Mindestens ein Schlag war zu früh oder zu spät.')
+      : 'Geklopft: ' + tap.times.length + '. Erwartet: ' + expected.length + '.';
+    $('rhythmTapStatus').textContent = '';
+    finish(correct, detail);
+  }, (tap.end - ctx.currentTime + .04) * 1000);
+}
+
+function recordRhythmTap() {
+  if (!st.tap) return;
+  const time = st.ctx.currentTime;
+  if (time >= st.tap.start - st.tap.tolerance && time < st.tap.end) {
+    st.tap.times.push(time - st.tap.start);
+    $('rhythmTapStatus').textContent = 'Schläge erfasst: ' + st.tap.times.length;
+  }
+}
+
 function newQuestion(){
-stopMic();st.round++;if(st.round>st.total){result();return}
-st.chord = st.level >= 3 ? makeChord() : null;
-if (!st.chord) {
+stopMic();stopRhythm();st.round++;if(st.round>st.total){result();return}
+const rhythm = st.track === 'rhythm';
+st.chord = !rhythm && st.level >= 3 ? makeChord() : null;
+if (!rhythm && !st.chord) {
 let pool=INTERVALS.filter(x=>x.tier<=st.level);let next=choose(pool);if(st.it&&pool.length>1){for(let k=0;k<10&&next===st.it;k++)next=choose(pool)}
 st.it=next;let sign=st.dir==='mixed'?(Math.random()<.5?1:-1):st.dir==='down'?-1:1;
 let candidates=['C','D','E','F','G','A','B'].map(l=>({l,o:sign===1?4:5,a:0})).filter(n=>{let p=makeNote(n,next,sign);return Math.abs(p.a)<=1&&midi(p)>=55&&midi(p)<=84});
 st.a=choose(candidates.length?candidates:[{l:'C',o:sign===1?4:5,a:0}]);st.b=makeNote(st.a,next,sign);
 }
 st.answered=false;st.stage=0;st.last=-1;st.stable=0;
-$('listenArea').hidden=Boolean(st.chord)||st.mode!=='listen';$('singArea').hidden=st.mode!=='sing';$('chordArea').hidden=!st.chord;$('feedback').hidden=true;
-$('roundTag').textContent=LEVELS[st.level].toUpperCase()+' · '+(st.mode==='listen'?'ERKENNEN':'SINGEN');
+$('listenArea').hidden=rhythm||Boolean(st.chord)||st.mode!=='listen';$('singArea').hidden=rhythm||st.mode!=='sing';$('chordArea').hidden=!st.chord;$('feedback').hidden=true;
+$('notationCard').hidden = rhythm;
+$('rhythmArea').hidden = !rhythm;
+const levelName = (rhythm ? RHYTHM_LEVELS[st.rhythmLevel].name : LEVELS[st.level]).toUpperCase();
+$('roundTag').textContent=levelName+' · '+(rhythm?'RHYTHMUS':st.mode==='listen'?'ERKENNEN':'SINGEN');
 $('roundCounter').textContent='AUFGABE '+String(st.round).padStart(2,'0')+' / '+st.total;
 $('progressFill').style.width=(100*(st.round-1)/st.total)+'%';
-$('levelLabel').textContent=LEVELS[st.level].toUpperCase();
+$('levelLabel').textContent=levelName;
 $('answerInput').value='';$('answerInput').disabled=false;$('checkButton').disabled=false;$('nextButton').disabled=true;$('revealButton').disabled=false;
 $('nextButton').textContent=st.round===st.total?'Ergebnis anzeigen →':'Nächste Aufgabe →';
 $('correctScore').textContent=st.correct;$('streakScore').textContent=st.streak;
-if(st.chord){
+if(rhythm){
+showRhythmQuestion();
+}else if(st.chord){
 showChordQuestion();
 }else if(st.mode==='sing'){
 $('promptEyebrow').textContent='GESANGSTRAINING';$('promptTitle').textContent='Kannst du das Intervall singen?';$('promptDescription').textContent='Singe zuerst den Startton und danach den Zielton.';showScore();
@@ -162,9 +356,26 @@ return labels.some(s=>normalize(s)===normalize(input));
 function finish(ok,extra=''){
 if(st.answered)return;st.answered=true;stopMic();
 if(ok){st.correct++;st.streak++;stats.total++;stats.best=Math.max(stats.best,st.streak);save()}else st.streak=0;
-$('correctScore').textContent=st.correct;$('streakScore').textContent=st.streak;updateStats();showScore();
+$('correctScore').textContent=st.correct;$('streakScore').textContent=st.streak;updateStats();
 let solution;
-if (st.chord) {
+if (st.track === 'rhythm') {
+  stopRhythm();
+  const { answer, target, level } = st.rhythm;
+  $('rhythmScore').innerHTML = rhythmNotation(target, level.meter);
+  $('rhythmScore').hidden = false;
+  $('rhythmChoices').querySelectorAll('.rhythm-answer').forEach((button, index) => {
+    button.disabled = true;
+    if (index === answer) button.classList.add('active');
+  });
+  if (st.rhythmType === 'tap') {
+    $('startRhythmTap').disabled = true;
+    $('playRhythm').disabled = false;
+    $('rhythmTapStatus').textContent = '';
+    solution = 'Rhythmus im Notenbild';
+  } else {
+    solution = 'Rhythmus ' + 'ABC'[answer];
+  }
+} else if (st.chord) {
   const { quality, inversion, position } = st.chord;
   solution = isVoicingLevel()
     ? INVERSIONS[inversion] + ' · ' + POSITIONS[position] + ' (' + quality.label + ')'
@@ -173,6 +384,7 @@ if (st.chord) {
 } else {
   solution = st.it.label + ' (' + st.it.short + ')';
 }
+if (st.track !== 'rhythm') showScore();
 const f=$('feedback');f.hidden=false;f.className='feedback '+(ok?'good':'bad');f.textContent=(ok?'✓ Richtig! ':'Lösung: ')+solution+'. '+extra;
 $('nextButton').disabled=false;$('checkButton').disabled=true;$('revealButton').disabled=true;
 }
@@ -191,7 +403,7 @@ function checkChord() {
 }
 function result(){
 stopMic();$('roundCounter').textContent='TRAINING ABGESCHLOSSEN';$('progressFill').style.width='100%';$('promptEyebrow').textContent='DEIN ERGEBNIS';$('promptTitle').textContent=st.correct+' von '+st.total+' richtig';$('promptDescription').textContent=Math.round(st.correct/st.total*100)+'% Trefferquote. Starte eine neue Runde.';
-$('listenArea').hidden=true;$('singArea').hidden=true;$('chordArea').hidden=true;$('feedback').hidden=true;$('revealButton').disabled=true;$('nextButton').disabled=false;$('nextButton').textContent='Noch einmal spielen ↻';hideScore();
+$('listenArea').hidden=true;$('singArea').hidden=true;$('chordArea').hidden=true;$('rhythmArea').hidden=true;$('feedback').hidden=true;$('revealButton').disabled=true;$('nextButton').disabled=false;$('nextButton').textContent='Noch einmal spielen ↻';hideScore();
 }
 function y(n){return 132-((n.o*7+LETTERS.indexOf(n.l))-(4*7+2))*10}
 function score(){
@@ -242,7 +454,7 @@ st.raf=requestAnimationFrame(loop)
 async function microphone(){
 if(st.stream){stopMic();return}
 if(!navigator.mediaDevices?.getUserMedia){$('micStatus').textContent='Mikrofon benötigt HTTPS';return}
-try{let stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});if(st.mode!=='sing'||st.answered){stream.getTracks().forEach(t=>t.stop());return}
+try{let stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});if(st.track!=='pitch'||st.mode!=='sing'||st.answered){stream.getTracks().forEach(t=>t.stop());return}
 st.stream=stream;st.source=audio().createMediaStreamSource(stream);st.analyser=audio().createAnalyser();st.analyser.fftSize=4096;st.source.connect(st.analyser);$('micButtonLabel').textContent='Mikrofon stoppen';$('micButton').classList.add('recording');$('micStatus').textContent='Singe den Startton';loop()
 }catch(e){$('micStatus').textContent='Mikrofonzugriff nicht möglich';}
 }
@@ -273,6 +485,41 @@ document.querySelectorAll('[data-level]').forEach((button, level, buttons) => {
 });
 $('listenMode').onclick=()=>{setMode('listen');reset()};
 $('singMode').onclick=()=>{setMode('sing');reset()};
+function setTrack(track) {
+  if (st.track === track) return;
+  st.track = track;
+  const rhythm = track === 'rhythm';
+  $('pitchLevels').hidden = rhythm;
+  $('pitchModeSettings').hidden = rhythm;
+  $('rhythmLevels').hidden = !rhythm;
+  $('rhythmSettings').hidden = !rhythm;
+  for (const [id, active] of [['pitchTrack', !rhythm], ['rhythmTrack', rhythm]]) {
+    $(id).classList.toggle('active', active);
+    $(id).setAttribute('aria-pressed', active);
+  }
+  reset();
+}
+$('pitchTrack').onclick = () => setTrack('pitch');
+$('rhythmTrack').onclick = () => setTrack('rhythm');
+document.querySelectorAll('[data-rhythm-level]').forEach((button, index, buttons) => {
+  button.onclick = () => {
+    st.rhythmLevel = index;
+    buttons.forEach(option => {
+      option.classList.toggle('active', option === button);
+      option.setAttribute('aria-pressed', option === button);
+    });
+    reset();
+  };
+});
+$('rhythmType').onchange = event => { st.rhythmType = event.target.value; reset(); };
+$('playRhythm').onclick = () => playRhythm(st.rhythm.target);
+$('startRhythmTap').onclick = startRhythmTap;
+$('rhythmPad').onclick = recordRhythmTap;
+$('rhythmPad').onkeydown = event => {
+  if (event.code !== 'Space') return;
+  event.preventDefault();
+  if (!event.repeat) recordRhythmTap();
+};
 $('playChord').onclick=playChord;
 $('checkChord').onclick=checkChord;
 $('questionType').onchange=e=>{st.type=e.target.value;reset()};
@@ -285,4 +532,5 @@ $('micButton').onclick=microphone;
 $('resetProgress').onclick=()=>{if(confirm('Fortschritt zurücksetzen?')){stats.best=0;stats.total=0;save();updateStats();reset()}};
 $('helpButton').onclick=()=>$('helpDialog').showModal();
 window.addEventListener('pagehide',stopMic);
+window.addEventListener('pagehide',stopRhythm);
 updateStats();reset();

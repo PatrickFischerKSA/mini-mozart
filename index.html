@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#141727">
   <meta name="description" content="Mini Mozart – Intervalle, Dreiklänge, Umkehrungen, Lagen und Vierklänge hören und im Notenbild erkennen.">
   <title>Mini Mozart · Solfège-Lernspiel</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="app.js?v=seventh-voicings" defer></script>
+  <link rel="stylesheet" href="style.css?v=rhythm-tap">
+  <script src="app.js?v=rhythm-tap" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -17,11 +17,16 @@
       <div class="topright"><span class="chip"><span class="dot"></span> Ohne Anmeldung</span><button class="iconbutton" id="helpButton" aria-label="Anleitung öffnen" title="Anleitung">?</button></div>
     </header>
     <main>
-      <section class="hero"><p class="eyebrow">HÖREN. VERSTEHEN. SINGEN.</p><h1>Dein Gehör.<br><em>Deine Musik.</em></h1><p class="lede">Erkenne Intervalle, Dreiklänge und Vierklänge nach Gehör oder im Notenbild. Trainiere auch Umkehrungen, Lagen und das Singen von Intervallen.</p></section>
+      <section class="hero"><p class="eyebrow">HÖREN. VERSTEHEN. SINGEN.</p><h1>Dein Gehör.<br><em>Deine Musik.</em></h1><p class="lede">Trainiere Intervalle, Akkorde und Rhythmen nach Gehör oder im Notenbild. Übe auch das Singen von Intervallen.</p></section>
       <div class="workspace">
         <aside class="sidepanel" aria-label="Spieleinstellungen">
+          <div class="blockhead"><span>TRAININGSBEREICH</span></div>
+          <div class="modes track-choices" role="group" aria-label="Trainingsbereich">
+            <button id="pitchTrack" class="modebtn active" aria-pressed="true">Intervalle &amp; Akkorde</button>
+            <button id="rhythmTrack" class="modebtn" aria-pressed="false">Rhythmus</button>
+          </div>
           <div class="blockhead"><span>01 / LEVEL</span><span class="muted">Wähle deine Stufe</span></div>
-          <div class="levelchoices" role="group" aria-label="Schwierigkeitsstufe">
+          <div id="pitchLevels" class="levelchoices" role="group" aria-label="Schwierigkeitsstufe">
             <button data-level="basic" class="levelbtn active" aria-pressed="true"><span class="levelsymbol">Ⅰ</span><span><strong>Basic</strong><small>Prime bis Quinte</small></span><span class="levelcheck">✓</span></button>
             <button data-level="advanced" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅱ</span><span><strong>Advanced</strong><small>Bis zur Septime</small></span><span class="levelcheck">✓</span></button>
             <button data-level="pro" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅲ</span><span><strong>Profi</strong><small>Tritonus &amp; Alterationen</small></span><span class="levelcheck">✓</span></button>
@@ -30,11 +35,20 @@
             <button data-level="sevenths" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅵ</span><span><strong>Vierklänge</strong><small>Fünf Septakkordtypen in Grundstellung</small></span><span class="levelcheck">✓</span></button>
             <button data-level="seventh-voicings" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅶ</span><span><strong>Vierklangumkehrungen</strong><small>Umkehrung und Lage bestimmen</small></span><span class="levelcheck">✓</span></button>
           </div>
+          <div id="rhythmLevels" class="levelchoices" role="group" aria-label="Rhythmusstufe" hidden>
+            <button data-rhythm-level="0" class="levelbtn active" aria-pressed="true"><span class="levelsymbol">Ⅰ</span><span><strong>Grundpuls</strong><small>Halbe, Viertel und Achtel im 4/4-Takt</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="1" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅱ</span><span><strong>Pausen &amp; Punktierungen</strong><small>Viertelpausen und punktierte Viertel</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="2" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅲ</span><span><strong>Synkopen &amp; Sechzehntel</strong><small>Zwischenschläge im 4/4-Takt</small></span><span class="levelcheck">✓</span></button>
+            <button data-rhythm-level="3" class="levelbtn" aria-pressed="false"><span class="levelsymbol">Ⅳ</span><span><strong>6/8-Takt</strong><small>Zwei Hauptschläge mit je drei Achteln</small></span><span class="levelcheck">✓</span></button>
+          </div>
           <div class="separator"></div>
+          <div id="pitchModeSettings">
           <div class="blockhead"><span>02 / TRAINING</span><span class="muted">Deine Disziplin</span></div>
           <div class="modes" role="group" aria-label="Trainingsmodus"><button id="listenMode" class="modebtn active" aria-pressed="true"><span class="modeicon">♫</span><strong>Erkennen</strong><small>Hören oder lesen</small></button><button id="singMode" class="modebtn" aria-pressed="false"><span class="modeicon">◉</span><strong>Singen</strong><small>Mit Mikrofon</small></button></div>
           <div id="listenOptions" class="optionblock"><label for="questionType">Aufgabentyp</label><select id="questionType"><option value="audio">Hören → Begriff</option><option value="notation">Notenbild → Begriff</option></select></div>
           <div class="optionblock"><label for="direction">Richtung</label><select id="direction"><option value="up">Aufwärts</option><option value="down">Abwärts</option><option value="mixed">Gemischt</option></select></div>
+          </div>
+          <div id="rhythmSettings" class="optionblock" hidden><label for="rhythmType">Aufgabentyp</label><select id="rhythmType"><option value="audio">Hören → Notenbild</option><option value="notation">Notenbild → Hören</option><option value="tap">Notenbild → Klopfen</option></select></div>
           <div class="separator"></div>
           <div class="statrow"><div><span class="statlabel">Beste Serie</span><strong id="bestStreak">0</strong></div><div><span class="statlabel">Gesamt richtig</span><strong id="allCorrect">0</strong></div></div>
           <button id="resetProgress" class="textbtn">Fortschritt zurücksetzen</button>
@@ -45,6 +59,19 @@
           <div class="gameintro"><div class="question-badge" id="promptSymbol">♪</div><p class="eyebrow" id="promptEyebrow">GEHÖRTRAINING</p><h2 id="promptTitle">Welches Intervall hörst du?</h2><p id="promptDescription" class="promptdesc">Spiele die zwei Töne ab und gib den Intervallnamen ein.</p></div>
           <div class="scoreboard"><span>RICHTIG <b id="correctScore">0</b></span><span>SERIE <b id="streakScore">0</b></span><span>LEVEL <b id="levelLabel">BASIC</b></span></div>
           <div class="notation-card" id="notationCard"><div class="notation-heading"><span>NOTENBILD</span><span id="notationHint">Nach deiner Antwort sichtbar</span></div><div id="scoreWrap" class="scorewrap is-hidden"><svg id="staff" viewBox="0 0 560 190" role="img" aria-label="Zwei Noten im Violinschlüssel" preserveAspectRatio="xMidYMid meet"></svg></div><div id="scorePlaceholder" class="scoreplaceholder"><span>𝄞</span><p>Entdecke die Noten nach der Lösung</p></div><div class="notelegend" id="noteLegend"></div></div>
+          <div id="rhythmArea" class="actionarea" hidden>
+            <div id="rhythmScore" class="notation-card rhythm-score" hidden></div>
+            <button id="playRhythm" class="playbtn" type="button"><span class="playtriangle">▶</span>Rhythmus abspielen</button>
+            <p class="answerhint">Ein Takt Vorzählen. Danach hörst du den Rhythmus mit leisem Grundpuls.</p>
+            <div id="rhythmChoices" class="rhythm-choices" role="group" aria-label="Rhythmus auswählen"></div>
+            <div id="rhythmTapArea" hidden>
+              <div class="rhythm-choice">
+                <button id="startRhythmTap" class="primarybtn" type="button">Einzählen und starten</button>
+                <button id="rhythmPad" class="secondarybtn" type="button" aria-label="Klopfen" disabled>Klopfen · Leertaste</button>
+              </div>
+              <p id="rhythmTapStatus" class="answerhint" role="status"></p>
+            </div>
+          </div>
           <div id="listenArea" class="actionarea"><button class="playbtn" id="playButton"><span class="playtriangle">▶</span><span>Intervall abspielen</span><small>2 Töne nacheinander</small></button><div class="answerrow"><label for="answerInput">DEINE ANTWORT</label><div class="answerinputrow"><input id="answerInput" type="text" autocomplete="off" spellcheck="false" placeholder="z. B. grosse Terz" aria-label="Intervallname eingeben"><button id="checkButton" class="primarybtn">Prüfen <span>↗</span></button></div><div class="answerhint" id="answerHint">Du kannst auch «g3», «k2» oder «r5» schreiben.</div></div></div>
           <div id="chordArea" class="actionarea" hidden>
             <button id="playChord" class="playbtn"><span class="playtriangle">▶</span><span id="playChordLabel">Dreiklang abspielen</span><small>Einzeln von unten nach oben, dann zusammen</small></button>
