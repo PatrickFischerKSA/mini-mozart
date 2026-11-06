@@ -114,6 +114,19 @@ body::before {
   opacity: 1;
 }
 
+.feedback.explanation {
+  border-color: #e5ba7870;
+}
+
+.feedback ul {
+  margin: 8px 0 0;
+  padding-inline-start: 1.3em;
+}
+
+.feedback li + li {
+  margin-top: 4px;
+}
+
 .rhythm-score svg,
 .rhythm-answer svg {
   display: block;

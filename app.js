@@ -184,7 +184,7 @@ function showRhythmQuestion() {
   const first = choose(alternatives);
   const choices = [first, choose(alternatives.filter(pattern => pattern !== first))];
   choices.splice(Math.floor(Math.random() * 3), 0, target);
-  st.rhythm = { target, level, answer: choices.indexOf(target) };
+  st.rhythm = { target, level, choices, answer: choices.indexOf(target) };
   const listening = st.rhythmType === 'audio';
   const tapping = st.rhythmType === 'tap';
   $('playRhythm').disabled = false;
@@ -223,7 +223,10 @@ function showRhythmQuestion() {
     answer.className = 'levelbtn rhythm-answer';
     answer.innerHTML = listening ? '<strong>' + letter + '</strong>' + rhythmNotation(pattern, level.meter)
       : '<strong>' + letter + ' auswählen</strong>';
-    answer.onclick = () => finish(index === st.rhythm.answer);
+    answer.onclick = () => {
+      st.rhythm.selected = index;
+      finish(index === st.rhythm.answer);
+    };
     row.append(answer);
     return row;
   }));
@@ -303,12 +306,31 @@ async function startRhythmTap() {
     const expected = expectedTaps(question.target, tap.unit);
     const sameCount = tap.times.length === expected.length;
     const correct = sameCount && expected.every((time, index) => Math.abs(tap.times[index] - time) <= tap.tolerance);
-    const detail = sameCount
-      ? (correct ? 'Alle Schläge waren im Takt.' : 'Mindestens ein Schlag war zu früh oder zu spät.')
-      : 'Geklopft: ' + tap.times.length + '. Erwartet: ' + expected.length + '.';
+    const detail = tapFeedback(expected, tap.times, tap.tolerance);
     $('rhythmTapStatus').textContent = '';
     finish(correct, detail);
   }, (tap.end - ctx.currentTime + .04) * 1000);
+}
+
+function tapFeedback(expected, actual, tolerance) {
+  const lines = ['Geklopft: ' + actual.length + '. Erwartet: ' + expected.length + '.'];
+  if (expected.length === actual.length) {
+    expected.forEach((time, index) => {
+      const difference = actual[index] - time;
+      lines.push('Schlag ' + (index + 1) + ': ' + (Math.abs(difference) <= tolerance
+        ? 'im Takt'
+        : Math.round(Math.abs(difference) * 1000) + ' ms zu ' + (difference < 0 ? 'früh' : 'spät')) + '.');
+    });
+  } else {
+    const unmatched = [...actual];
+    expected.forEach((time, index) => {
+      const match = unmatched.findIndex(hit => Math.abs(hit - time) <= tolerance);
+      if (match !== -1) unmatched.splice(match, 1);
+      else lines.push('Schlag ' + (index + 1) + ': kein Klopfen am erwarteten Zeitpunkt.');
+    });
+    if (unmatched.length) lines.push(unmatched.length + ' Klopfimpuls(e) ausserhalb der erwarteten Zeitpunkte.');
+  }
+  return lines;
 }
 
 function recordRhythmTap() {
@@ -459,6 +481,12 @@ function singMelodyLoop() {
   const nearAlternate = detected !== null && Math.abs(detected - target - alternateOctave) <= .55;
   const octave = melody.octave ?? (nearAlternate ? alternateOctave : 0);
   const difference = detected === null ? null : detected - target - octave;
+  const status = $('melodyStatus');
+  const noteNumber = 'Ton ' + (melody.step + 1) + ': ';
+  const hint = noteNumber + (difference === null ? 'Singe die markierte Note.' :
+    Math.abs(difference) <= .55 ? 'Tonhöhe stimmt. Halte den Ton kurz.' :
+      difference > 0 ? 'Zu hoch. Singe etwas tiefer.' : 'Zu tief. Singe etwas höher.');
+  if (status.textContent !== hint) status.textContent = hint;
   if (difference !== null && Math.abs(difference) <= .55) {
     melody.stableSince ??= performance.now();
     if (performance.now() - melody.stableSince >= 260) {
@@ -554,16 +582,96 @@ $('promptEyebrow').textContent='NOTENLESEN';$('promptTitle').textContent='Welche
 }
 function normalize(s){return s.toLowerCase().trim().replace(/ß/g,'ss').replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').replace(/[^a-z0-9]/g,'')}
 function matches(input,i){
+const symbol = INTERVALS.find(interval => interval.id === input.trim());
+if(symbol) return symbol === i;
 let qual=i.id[0]==='m'?'kleine':i.id[0]==='M'?'grosse':['P','p'].includes(i.id[0])?'reine':i.id[0]==='A'?'übermässige':'verminderte';
 let ordinal=['','Prime','Sekunde','Terz','Quarte','Quinte','Sexte','Septime'][i.degree];
-let labels=[i.label,i.short,i.id,qual+' '+ordinal,qual.slice(0,-1)+' '+ordinal];
+let labels=[i.label,i.short,qual+' '+ordinal,qual.slice(0,-1)+' '+ordinal];
 if(i.id==='p1')labels.push('Prime','Unisono');
 if(i.id==='P4')labels.push('Quarte');
 if(i.id==='P5')labels.push('Quinte');
 if(i.id==='A4'||i.id==='d5')labels.push('Tritonus');
 return labels.some(s=>normalize(s)===normalize(input));
 }
-function finish(ok,extra=''){
+
+function halfSteps(count) {
+  return count + (count === 1 ? ' Halbtonschritt' : ' Halbtonschritte');
+}
+
+function explainAnswer(revealed) {
+  if (st.track === 'melody') {
+    const { target, answer, step, voices, voice, octave } = st.melody;
+    if (st.melodyType !== 'dictation') {
+      const bass = voices && voice === 1;
+      const names = target.map(value => noteName(melodyNote(value, bass))).join(' – ');
+      const lines = ['Notierte Tonfolge: ' + names + '.'];
+      if (step < target.length) lines.push('Übe ab Ton ' + (step + 1) + ' weiter. Halte jeden Ton kurz stabil, bis die Markierung weiterspringt.');
+      else lines.push('Jeder Ton wurde in der richtigen Reihenfolge stabil erkannt.' + (octave ? ' Deine gewählte Oktave wurde für die ganze Melodie berücksichtigt.' : ''));
+      return lines;
+    }
+    return target.slice(1).map((value, offset) => {
+      const index = offset + 1;
+      const expected = noteName(MELODY_NOTES[value]);
+      const entered = answer[index];
+      const prefix = 'Ton ' + (index + 1) + ': ';
+      if (entered === null) return prefix + expected + (revealed ? '.' : ' fehlt.');
+      if (entered === value) return prefix + expected + ' stimmt.';
+      return prefix + noteName(MELODY_NOTES[entered]) + ' liegt zu ' +
+        (entered > value ? 'hoch' : 'tief') + '. Richtig ist ' + expected + '.';
+    });
+  }
+  if (st.track === 'rhythm') {
+    const { target, level, selected, choices, answer } = st.rhythm;
+    const lines = ['Notenwerte im ' + level.meter + '-Takt: ' + target.map(value => RHYTHM_VALUES[value]).join(' – ') + '.'];
+    if (st.rhythmType === 'tap') {
+      lines.push('Jede Note beginnt mit einem Klopfimpuls. Pausen und ausgehaltene Noten verschieben den nächsten Impuls.');
+    } else if (selected !== undefined && selected !== answer) {
+      const guess = choices[selected];
+      const index = target.findIndex((value, i) => value !== guess[i]);
+      if (index !== -1) lines.unshift('Deine Wahl ' + 'ABC'[selected] + ' weicht ab Zeichen ' + (index + 1) +
+        ' ab: ' + (RHYTHM_VALUES[guess[index]] || 'kein weiteres Zeichen') + ' statt ' + RHYTHM_VALUES[target[index]] + '.');
+    } else {
+      lines.push(level.meter === '6/8' ? 'Zähle zwei Gruppen zu je drei Achteln.' : 'Zähle vier Viertelschläge und achte auf die Unterteilung dazwischen.');
+    }
+    return lines;
+  }
+  if (st.chord) {
+    const { notes, quality, inversion, position } = st.chord;
+    if (isVoicingLevel()) {
+      const facts = [
+        ['Umkehrung', 'chordInversion', inversion, 'Unten liegt ' + noteName(notes[0]) + ' (' + POSITION_TONES[inversion] + '). Das ergibt ' + INVERSIONS[inversion] + '.'],
+        ['Lage', 'chordPosition', position, 'Oben liegt ' + noteName(notes[notes.length - 1]) + ' (' + POSITION_TONES[position] + '). Das ergibt ' + POSITIONS[position] + '.'],
+      ];
+      return facts.map(([label, id, expected, reason]) => {
+        const select = $(id);
+        const status = revealed || !select.value ? '' : Number(select.value) === expected
+          ? ' stimmt. ' : ' noch nicht richtig (deine Wahl: ' + select.selectedOptions[0].textContent + '). ';
+        return label + (status || ': ') + reason;
+      });
+    }
+    const thirds = [quality.third, quality.fifth - quality.third];
+    if (quality.seventh !== undefined) thirds.push(quality.seventh - quality.fifth);
+    const lines = ['Von unten nach oben: ' + thirds.map(distance => (distance === 3 ? 'kleine' : 'grosse') +
+      ' Terz (' + halfSteps(distance) + ')').join(' – ') + '.'];
+    const select = $('chordQuality');
+    if (!revealed && select.value && select.value !== quality.id) {
+      lines.unshift('Deine Wahl war «' + select.selectedOptions[0].textContent + '». Vergleiche die Terzen von unten nach oben.');
+    }
+    return lines;
+  }
+  const { a, b, it } = st;
+  const lines = [noteName(a) + ' → ' + noteName(b) + ': ' + halfSteps(it.semitones) + '.'];
+  if (st.mode === 'sing') {
+    lines.push(revealed ? 'Höre den Startton und singe danach den Zielton. Halte beide Töne kurz stabil.' :
+      'Start- und Zielton wurden in der richtigen Reihenfolge stabil erkannt.');
+  } else {
+    lines.push('Zähle die Notennamen einschliesslich Start- und Zielton: ' + it.degree +
+      '. Die Halbtonzahl bestimmt die genaue Intervallqualität.');
+  }
+  return lines;
+}
+
+function finish(ok,extra=[],revealed=false){
 if(st.answered)return;st.answered=true;stopMic();
 if(ok){st.correct++;st.streak++;stats.total++;stats.best=Math.max(stats.best,st.streak);save()}else st.streak=0;
 $('correctScore').textContent=st.correct;$('streakScore').textContent=st.streak;updateStats();
@@ -597,14 +705,31 @@ if (st.track === 'rhythm') {
   solution = st.it.label + ' (' + st.it.short + ')';
 }
 if (st.track === 'pitch') showScore();
-const f=$('feedback');f.hidden=false;f.className='feedback '+(ok?'good':'bad');
-const feedbackPrefix = ok ? '✓ Richtig! ' : st.track === 'melody' ? '' : 'Lösung: ';
-f.textContent=feedbackPrefix+solution+'. '+extra;
+const f=$('feedback');
+f.className='feedback '+(revealed?'explanation':ok?'good':'bad');
+const heading = document.createElement('strong');
+heading.textContent = (revealed ? 'Lösung · ' : ok ? '✓ Richtig · ' : 'Noch nicht richtig · ') + solution;
+const details = document.createElement('ul');
+for (const detail of [...(Array.isArray(extra) ? extra : [extra]), ...explainAnswer(revealed)]) {
+  const line = document.createElement('li');
+  line.textContent = detail;
+  details.append(line);
+}
+f.replaceChildren(heading, details);
+f.hidden=false;
 $('nextButton').disabled=false;$('checkButton').disabled=true;$('revealButton').disabled=true;
 }
 function check(){let v=$('answerInput').value;if(!v.trim())return $('answerInput').focus();
-let correct=matches(v,st.it),enh=false;if(!correct&&st.mode==='listen'&&st.type==='audio'&&INTERVALS.some(x=>x.semitones===st.it.semitones&&matches(v,x))){correct=true;enh=true}
-finish(correct,enh?'Klanglich enharmonisch gleich.':'')
+const entered = INTERVALS.filter(interval => matches(v, interval));
+const exact = entered.includes(st.it);
+const equivalent = entered.some(interval => interval.semitones === st.it.semitones);
+const enharmonic = !exact && equivalent && st.type === 'audio';
+let detail = [];
+if (enharmonic) detail = ['Deine Bezeichnung hat denselben Klang. Das gezeigte Notenbild verwendet eine andere Schreibweise.'];
+else if (!exact && equivalent) detail = ['Die Halbtonzahl stimmt. Zähle im Notenbild zusätzlich die Notennamen mit Start- und Zielton.'];
+else if (!exact && entered.length) detail = ['Deine Antwort entspricht ' + [...new Set(entered.map(interval => halfSteps(interval.semitones)))].join(' oder ') + '.'];
+else if (!exact) detail = ['Die Eingabe «' + v.trim() + '» ist kein erkannter Intervallname. Verwende den Namen oder das Kürzel.'];
+finish(exact || enharmonic, detail);
 }
 function checkChord() {
   const { quality, inversion, position } = st.chord;
@@ -795,7 +920,7 @@ $('questionType').onchange=e=>{st.type=e.target.value;reset()};
 $('direction').onchange=e=>{st.dir=e.target.value;reset()};
 $('playButton').onclick=play;$('referenceButton').onclick=()=>tone(midi(st.a),audio().currentTime+.08,.9);$('demoButton').onclick=play;
 $('checkButton').onclick=check;$('answerInput').onkeydown=e=>{if(e.key==='Enter')check()};
-$('revealButton').onclick=()=>finish(false);
+$('revealButton').onclick=()=>finish(false,[],true);
 $('nextButton').onclick=()=>st.round>st.total?reset():newQuestion();
 $('micButton').onclick=microphone;
 $('resetProgress').onclick=()=>{if(confirm('Fortschritt zurücksetzen?')){stats.best=0;stats.total=0;save();updateStats();reset()}};
